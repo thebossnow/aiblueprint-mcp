@@ -1,7 +1,15 @@
 """Shared types for aiblueprint-mcp."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
+
+
+class CommandError(Exception):
+    """Raised by backend operations for expected, user-facing failures.
+
+    The op decorator converts these into ``CommandResult(ok=False, error=...)``
+    so callers get a clean message instead of a traceback.
+    """
 
 
 @dataclass

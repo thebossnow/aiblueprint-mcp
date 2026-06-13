@@ -1,7 +1,6 @@
 """Entry point for aiblueprint-mcp: stdio MCP server."""
 
 import asyncio
-import sys
 
 from aiblueprint_mcp.server import main as server_main
 

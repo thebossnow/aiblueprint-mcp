@@ -52,14 +52,21 @@ Add to your MCP client (Claude Desktop, Hermes, etc.):
 
 ## Tools
 
-### `drawing` — File Management
+### `drawing` — File + Session Management
 
 | Operation | Description | Data |
 |-----------|-------------|------|
-| `create` | New empty drawing | `{name?}` |
-| `open` | Open existing DXF | `{path}` |
+| `create` | New empty drawing — returns a `handle` | `{name?}` |
+| `open` | Open existing DXF (within workspace) | `{path}` |
 | `info` | Layers, entity count, blocks | — |
-| `save` | Save to path | `{path}` |
+| `save` | Save to path (within workspace) | `{path?}` |
+| `list` | List all open drawings in the session | — |
+| `switch` | Make another open drawing current | `{handle}` |
+
+Multiple drawings can be open at once. Each `create`/`open` returns a `handle`;
+use `switch` to change which drawing subsequent operations target. File paths
+for `open`/`save` are confined to `AIBLUEPRINT_WORKSPACE` — traversal outside it
+(`../`, absolute escapes) is rejected.
 
 ### `entity` — Entity CRUD + Modification
 
@@ -76,14 +83,14 @@ Add to your MCP client (Claude Desktop, Hermes, etc.):
 | `create_mtext` | `data: {x, y, width, text, height?}, layer?` |
 | `create_hatch` | `entity_id, data: {pattern?, scale?}` |
 
-**Read:** `list` (by layer), `get` (by entity_id)
+**Read:** `list` (by layer), `get` (full detail for LINE/CIRCLE/ARC/LWPOLYLINE/TEXT/MTEXT/INSERT/HATCH), `measure` (area / perimeter / length quantity takeoff by entity_id)
 
 **Modify:**
 
 | Operation | Notes |
 |-----------|-------|
 | `copy` / `move` / `rotate` / `scale` / `mirror` | Standard CAD transforms |
-| `offset` | ⭐ Offset closed polylines — deck bands, setbacks |
+| `offset` | ⭐ Offset polylines (open or closed) — deck bands, setbacks |
 | `fillet` | ⭐ Fillet two lines with a radius arc + auto-trim |
 | `array` | Rectangular array (rows × cols) |
 | `erase` | By entity_id or `"last"` |
@@ -92,7 +99,7 @@ Add to your MCP client (Claude Desktop, Hermes, etc.):
 
 `list`, `create`, `set_current`, `set_properties`, `freeze`, `thaw`, `lock`, `unlock`
 
-Colors: `red`, `yellow`, `green`, `cyan`, `blue`, `magenta`, `white`, `grey`, `lightgrey`
+Named colors: `red`, `yellow`, `green`, `cyan`, `blue`, `magenta`, `white`, `grey`, `lightgrey`. For arbitrary colors, pass `true_color: [r, g, b]` (0–255) to `create` or `set_properties`.
 
 ### `block` — Blocks + Attributes
 
@@ -127,7 +134,8 @@ Example:
 | Operation | Description |
 |-----------|-------------|
 | `preview` | Save DXF + render PNG via LibreCAD `dxf2png` — returns file paths |
-| `screenshot` | Render DXF as base64 PNG via matplotlib (no LibreCAD needed) |
+| `screenshot` | Render the drawing via matplotlib and return it as a native MCP image (no LibreCAD needed) |
+| `export` | Write a PNG/PDF/SVG to the workspace. `data: {format?: "pdf"|"png"|"svg", path?}` |
 
 ## Hatch Patterns
 
@@ -191,6 +199,23 @@ async def main():
 
 asyncio.run(main())
 ```
+
+## Input Validation
+
+Every tool operation validates its input against a per-operation schema
+(Pydantic) before touching the drawing. Missing required fields, wrong types,
+out-of-range values (e.g. a negative radius), and unknown fields are rejected
+with a clear message — `{"ok": false, "error": "Invalid input for entity.create_circle: ..."}` — instead of a raw traceback.
+
+## Development
+
+```bash
+uv sync --extra dev      # install dev dependencies (pytest, ruff)
+uv run pytest -q         # run the test suite
+uv run ruff check src tests
+```
+
+CI runs lint + tests on Python 3.10–3.12 via GitHub Actions (`.github/workflows/ci.yml`).
 
 ## License
 

@@ -2,15 +2,19 @@
 
 Tools: drawing, entity, layer, block, annotation, view
 
-Each tool dispatches to operation-specific backend methods.
+Each tool validates its input against a per-operation schema (validation.py),
+then dispatches to operation-specific backend methods.
 """
 
 from __future__ import annotations
 
+import json
+
 import structlog
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP, Image
 
 from aiblueprint_mcp.backend import AIBlueprintBackend
+from aiblueprint_mcp.validation import ValidationError, validate
 
 log = structlog.get_logger()
 mcp = FastMCP("aiblueprint-mcp")
@@ -31,33 +35,45 @@ async def _get_backend() -> AIBlueprintBackend:
 
 
 def _ok(data: dict) -> str:
-    """Serialize a result dict to JSON."""
-    import json
     return json.dumps({"ok": True, **data}, default=str)
 
 
 def _err(msg: str) -> str:
-    """Serialize an error to JSON."""
-    import json
     return json.dumps({"ok": False, "error": msg})
 
 
+def _result(r) -> str:
+    """Serialize a CommandResult to a JSON string."""
+    return _ok(r.payload or {}) if r.ok else _err(r.error or "Unknown error")
+
+
+def _check(tool: str, operation: str, data: dict) -> dict:
+    """Validate input for ``tool.operation``; raises ValidationError on failure."""
+    return validate(f"{tool}.{operation}", data)
+
+
 # ═══════════════════════════════════════════════════════════════════════
-# 1. drawing — File/drawing management
+# 1. drawing — File/session management
 # ═══════════════════════════════════════════════════════════════════════
 
 @mcp.tool()
 async def drawing(operation: str, data: dict | None = None) -> str:
-    """Drawing file management.
+    """Drawing file and session management.
 
     Operations:
-      create — New empty drawing. data: {name?}
-      open   — Open existing DXF. data: {path}
-      info   — Get layers, entity count, blocks.
-      save   — Save to path. data: {path}
+      create — New empty drawing. data: {name?} → returns handle
+      open   — Open existing DXF (within workspace). data: {path}
+      info   — Get layers, entity count, blocks for current drawing.
+      save   — Save to path (within workspace). data: {path?}
+      list   — List all open drawings in the session.
+      switch — Make another open drawing current. data: {handle}
     """
     data = data or {}
     b = await _get_backend()
+    try:
+        data = _check("drawing", operation, data)
+    except ValidationError as ve:
+        return _err(f"Invalid input for drawing.{operation}: {ve}")
 
     if operation == "create":
         r = await b.drawing_create(data.get("name"))
@@ -67,10 +83,13 @@ async def drawing(operation: str, data: dict | None = None) -> str:
         r = await b.drawing_info()
     elif operation == "save":
         r = await b.drawing_save(data.get("path"))
+    elif operation == "list":
+        r = await b.drawing_list()
+    elif operation == "switch":
+        r = await b.drawing_switch(data["handle"])
     else:
         return _err(f"Unknown drawing operation: {operation}")
-
-    return _ok(r.payload) if r.ok else _err(r.error or "Unknown error")
+    return _result(r)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -89,84 +108,52 @@ async def entity(
 ) -> str:
     """Entity creation, querying, and modification.
 
-    Create operations:
-      create_line       — x1, y1, x2, y2, layer?
-      create_circle     — data: {cx, cy, radius}, layer?
-      create_polyline   — points: [[x,y],...], data: {closed?}, layer?
-      create_rectangle  — x1, y1, x2, y2, layer?
-      create_arc        — data: {cx, cy, radius, start_angle, end_angle}, layer?
-      create_text       — data: {x, y, text, height?, rotation?}, layer?
-      create_mtext      — data: {x, y, width, text, height?}, layer?
-      create_hatch      — entity_id, data: {pattern?, scale?}
+    Create: create_line, create_circle, create_polyline, create_rectangle,
+            create_arc, create_text, create_mtext, create_hatch
+    Read:   list, get, measure (area/perimeter/length takeoff)
+    Modify: copy, move, rotate, scale, mirror, offset, array, fillet, erase
 
-    Read operations:
-      list              — layer? → list entities
-      get               — entity_id → entity details
-
-    Modify operations:
-      copy    — entity_id, data: {dx, dy}
-      move    — entity_id, data: {dx, dy}
-      rotate  — entity_id, data: {cx, cy, angle}
-      scale   — entity_id, data: {cx, cy, factor}
-      mirror  — entity_id, x1, y1, x2, y2
-      offset  — entity_id, data: {distance}
-      array   — entity_id, data: {rows, cols, row_dist, col_dist}
-      fillet  — data: {id1, id2, radius}
-      erase   — entity_id
+    Top-level x1/y1/x2/y2/points/layer/entity_id are merged into data; see the
+    README for the per-operation fields.
     """
-    data = data or {}
+    raw = dict(data or {})
+    # Fold top-level convenience params into the data dict when provided.
+    for k, v in (("x1", x1), ("y1", y1), ("x2", x2), ("y2", y2),
+                 ("points", points), ("layer", layer), ("entity_id", entity_id)):
+        if v is not None and k not in raw:
+            raw[k] = v
     b = await _get_backend()
+    try:
+        d = _check("entity", operation, raw)
+    except ValidationError as ve:
+        return _err(f"Invalid input for entity.{operation}: {ve}")
 
-    # Create
-    if operation == "create_line":
-        r = await b.create_line(x1, y1, x2, y2, layer)
-    elif operation == "create_circle":
-        r = await b.create_circle(data["cx"], data["cy"], data["radius"], layer)
-    elif operation == "create_polyline":
-        r = await b.create_polyline(points or [], data.get("closed", False), layer)
-    elif operation == "create_rectangle":
-        r = await b.create_rectangle(x1, y1, x2, y2, layer)
-    elif operation == "create_arc":
-        r = await b.create_arc(data["cx"], data["cy"], data["radius"],
-                               data["start_angle"], data["end_angle"], layer)
-    elif operation == "create_text":
-        r = await b.create_text(data["x"], data["y"], data["text"],
-                                data.get("height", 2.5), data.get("rotation", 0.0), layer)
-    elif operation == "create_mtext":
-        r = await b.create_mtext(data["x"], data["y"], data["width"], data["text"],
-                                 data.get("height", 2.5), layer)
-    elif operation == "create_hatch":
-        r = await b.create_hatch(entity_id, data.get("pattern", "ANSI31"),
-                                 data.get("scale", 1.0))
-    # Read
-    elif operation == "list":
-        r = await b.entity_list(layer)
-    elif operation == "get":
-        r = await b.entity_get(entity_id)
-    # Modify
-    elif operation == "copy":
-        r = await b.entity_copy(entity_id, data["dx"], data["dy"])
-    elif operation == "move":
-        r = await b.entity_move(entity_id, data["dx"], data["dy"])
-    elif operation == "rotate":
-        r = await b.entity_rotate(entity_id, data["cx"], data["cy"], data["angle"])
-    elif operation == "scale":
-        r = await b.entity_scale(entity_id, data["cx"], data["cy"], data["factor"])
-    elif operation == "mirror":
-        r = await b.entity_mirror(entity_id, x1, y1, x2, y2)
-    elif operation == "offset":
-        r = await b.entity_offset(entity_id, data["distance"])
-    elif operation == "array":
-        r = await b.entity_array(entity_id, data["rows"], data["cols"],
-                                 data["row_dist"], data["col_dist"])
-    elif operation == "fillet":
-        r = await b.entity_fillet(data["id1"], data["id2"], data["radius"])
-    elif operation == "erase":
-        r = await b.entity_erase(entity_id)
-    else:
+    ops = {
+        "create_line": lambda: b.create_line(d["x1"], d["y1"], d["x2"], d["y2"], d.get("layer")),
+        "create_circle": lambda: b.create_circle(d["cx"], d["cy"], d["radius"], d.get("layer")),
+        "create_polyline": lambda: b.create_polyline(d["points"], d.get("closed", False), d.get("layer")),
+        "create_rectangle": lambda: b.create_rectangle(d["x1"], d["y1"], d["x2"], d["y2"], d.get("layer")),
+        "create_arc": lambda: b.create_arc(d["cx"], d["cy"], d["radius"], d["start_angle"], d["end_angle"], d.get("layer")),
+        "create_text": lambda: b.create_text(d["x"], d["y"], d["text"], d.get("height", 2.5), d.get("rotation", 0.0), d.get("layer")),
+        "create_mtext": lambda: b.create_mtext(d["x"], d["y"], d["width"], d["text"], d.get("height", 2.5), d.get("layer")),
+        "create_hatch": lambda: b.create_hatch(d["entity_id"], d.get("pattern", "ANSI31"), d.get("scale", 1.0)),
+        "list": lambda: b.entity_list(d.get("layer")),
+        "get": lambda: b.entity_get(d["entity_id"]),
+        "measure": lambda: b.entity_measure(d["entity_id"]),
+        "copy": lambda: b.entity_copy(d["entity_id"], d["dx"], d["dy"]),
+        "move": lambda: b.entity_move(d["entity_id"], d["dx"], d["dy"]),
+        "rotate": lambda: b.entity_rotate(d["entity_id"], d["cx"], d["cy"], d["angle"]),
+        "scale": lambda: b.entity_scale(d["entity_id"], d["cx"], d["cy"], d["factor"]),
+        "mirror": lambda: b.entity_mirror(d["entity_id"], d["x1"], d["y1"], d["x2"], d["y2"]),
+        "offset": lambda: b.entity_offset(d["entity_id"], d["distance"]),
+        "array": lambda: b.entity_array(d["entity_id"], d["rows"], d["cols"], d["row_dist"], d["col_dist"]),
+        "fillet": lambda: b.entity_fillet(d["id1"], d["id2"], d["radius"]),
+        "erase": lambda: b.entity_erase(d["entity_id"]),
+    }
+    handler = ops.get(operation)
+    if handler is None:
         return _err(f"Unknown entity operation: {operation}")
-
-    return _ok(r.payload) if r.ok else _err(r.error or "Unknown error")
+    return _result(await handler())
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -179,37 +166,39 @@ async def layer(operation: str, data: dict | None = None) -> str:
 
     Operations:
       list            — List all layers.
-      create          — data: {name, color?, linetype?}
+      create          — data: {name, color?, linetype?, true_color?: [r,g,b]}
       set_current     — data: {name}
-      set_properties  — data: {name, color?, linetype?}
+      set_properties  — data: {name, color?, linetype?, true_color?: [r,g,b]}
       freeze / thaw   — data: {name}
       lock / unlock   — data: {name}
     """
     data = data or {}
     b = await _get_backend()
+    try:
+        d = _check("layer", operation, data)
+    except ValidationError as ve:
+        return _err(f"Invalid input for layer.{operation}: {ve}")
 
     if operation == "list":
         r = await b.layer_list()
     elif operation == "create":
-        r = await b.layer_create(data["name"], data.get("color", "white"),
-                                 data.get("linetype", "CONTINUOUS"))
+        r = await b.layer_create(d["name"], d.get("color", "white"),
+                                 d.get("linetype", "CONTINUOUS"), d.get("true_color"))
     elif operation == "set_current":
-        r = await b.layer_set_current(data["name"])
+        r = await b.layer_set_current(d["name"])
     elif operation == "set_properties":
-        r = await b.layer_set_properties(data["name"], data.get("color"),
-                                         data.get("linetype"))
+        r = await b.layer_set_properties(d["name"], d.get("color"), d.get("linetype"), d.get("true_color"))
     elif operation == "freeze":
-        r = await b.layer_freeze(data["name"])
+        r = await b.layer_freeze(d["name"])
     elif operation == "thaw":
-        r = await b.layer_thaw(data["name"])
+        r = await b.layer_thaw(d["name"])
     elif operation == "lock":
-        r = await b.layer_lock(data["name"])
+        r = await b.layer_lock(d["name"])
     elif operation == "unlock":
-        r = await b.layer_unlock(data["name"])
+        r = await b.layer_unlock(d["name"])
     else:
         return _err(f"Unknown layer operation: {operation}")
-
-    return _ok(r.payload) if r.ok else _err(r.error or "Unknown error")
+    return _result(r)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -230,28 +219,27 @@ async def block(operation: str, data: dict | None = None) -> str:
     """
     data = data or {}
     b = await _get_backend()
+    try:
+        d = _check("block", operation, data)
+    except ValidationError as ve:
+        return _err(f"Invalid input for block.{operation}: {ve}")
 
     if operation == "list":
         r = await b.block_list()
     elif operation == "insert":
-        r = await b.block_insert(data["name"], data["x"], data["y"],
-                                 data.get("scale", 1.0), data.get("rotation", 0.0))
+        r = await b.block_insert(d["name"], d["x"], d["y"], d.get("scale", 1.0), d.get("rotation", 0.0))
     elif operation == "insert_with_attributes":
         r = await b.block_insert_with_attributes(
-            data["name"], data["x"], data["y"],
-            data.get("scale", 1.0), data.get("rotation", 0.0),
-            data.get("attributes"),
-        )
+            d["name"], d["x"], d["y"], d.get("scale", 1.0), d.get("rotation", 0.0), d.get("attributes"))
     elif operation == "get_attributes":
-        r = await b.block_get_attributes(data["entity_id"])
+        r = await b.block_get_attributes(d["entity_id"])
     elif operation == "update_attribute":
-        r = await b.block_update_attribute(data["entity_id"], data["tag"], data["value"])
+        r = await b.block_update_attribute(d["entity_id"], d["tag"], d["value"])
     elif operation == "define":
-        r = await b.block_define(data["name"], data.get("entities", []))
+        r = await b.block_define(d["name"], d.get("entities", []))
     else:
         return _err(f"Unknown block operation: {operation}")
-
-    return _ok(r.payload) if r.ok else _err(r.error or "Unknown error")
+    return _result(r)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -274,66 +262,66 @@ async def annotation(operation: str, data: dict | None = None) -> str:
     """
     data = data or {}
     b = await _get_backend()
+    try:
+        d = _check("annotation", operation, data)
+    except ValidationError as ve:
+        return _err(f"Invalid input for annotation.{operation}: {ve}")
 
     if operation == "create_text":
-        r = await b.create_text(
-            data["x"], data["y"], data["text"],
-            data.get("height", 2.5), data.get("rotation", 0.0), data.get("layer"),
-        )
+        r = await b.create_text(d["x"], d["y"], d["text"], d.get("height", 2.5),
+                                d.get("rotation", 0.0), d.get("layer"))
     elif operation == "create_dimension_aligned":
-        r = await b.create_dimension_aligned(
-            data["x1"], data["y1"], data["x2"], data["y2"], data["offset"],
-            data.get("dim_overrides"),
-        )
+        r = await b.create_dimension_aligned(d["x1"], d["y1"], d["x2"], d["y2"], d["offset"], d.get("dim_overrides"))
     elif operation == "create_dimension_linear":
-        r = await b.create_dimension_linear(
-            data["x1"], data["y1"], data["x2"], data["y2"],
-            data["dim_x"], data["dim_y"], data.get("dim_overrides"),
-        )
+        r = await b.create_dimension_linear(d["x1"], d["y1"], d["x2"], d["y2"], d["dim_x"], d["dim_y"], d.get("dim_overrides"))
     elif operation == "create_dimension_angular":
-        r = await b.create_dimension_angular(
-            data["cx"], data["cy"], data["x1"], data["y1"],
-            data["x2"], data["y2"], data.get("dim_overrides"),
-        )
+        r = await b.create_dimension_angular(d["cx"], d["cy"], d["x1"], d["y1"], d["x2"], d["y2"], d.get("dim_overrides"))
     elif operation == "create_dimension_radius":
-        r = await b.create_dimension_radius(
-            data["cx"], data["cy"], data["radius"], data["angle"],
-            data.get("dim_overrides"),
-        )
+        r = await b.create_dimension_radius(d["cx"], d["cy"], d["radius"], d["angle"], d.get("dim_overrides"))
     elif operation == "create_leader":
-        r = await b.create_leader(data["points"], data["text"])
+        r = await b.create_leader(d["points"], d["text"])
     else:
         return _err(f"Unknown annotation operation: {operation}")
-
-    return _ok(r.payload) if r.ok else _err(r.error or "Unknown error")
+    return _result(r)
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# 6. view — Preview and screenshot
+# 6. view — Preview, screenshot, export
 # ═══════════════════════════════════════════════════════════════════════
 
 @mcp.tool()
-async def view(operation: str) -> str:
-    """Preview and screenshot.
+async def view(operation: str, data: dict | None = None):
+    """Preview, screenshot, and export.
 
     Operations:
-      screenshot   — Render DXF as base64 PNG (matplotlib).
-      preview      — Save DXF + render PNG via LibreCAD dxf2png. Returns file paths.
+      screenshot   — Render current drawing as a PNG image (matplotlib).
+      preview      — Save DXF + render PNG via LibreCAD. Returns file paths.
+      export       — Write PNG/PDF/SVG to the workspace. data: {format?, path?}
     """
+    data = data or {}
     b = await _get_backend()
 
     if operation == "screenshot":
         r = await b.get_screenshot()
+        if r.ok and r.payload:
+            import base64
+            return Image(data=base64.b64decode(r.payload["image_base64"]), format="png")
+        return _err(r.error or "screenshot failed")
     elif operation == "preview":
         r = await b.preview()
+    elif operation == "export":
+        r = await b.export(data.get("format", "pdf"), data.get("path"))
     else:
         return _err(f"Unknown view operation: {operation}")
-
-    return _ok(r.payload) if r.ok else _err(r.error or "Unknown error")
+    return _result(r)
 
 
 async def main():
     """Run the MCP server over stdio."""
+    import logging
+
+    # ezdxf logs verbose INFO records; keep stdio clean for the MCP protocol.
+    logging.getLogger("ezdxf").setLevel(logging.WARNING)
     await mcp.run_stdio_async()
 
 

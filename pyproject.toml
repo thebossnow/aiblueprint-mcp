@@ -11,10 +11,14 @@ dependencies = [
     "matplotlib>=3.7",
     "Pillow>=10.0.0",
     "structlog>=24.0.0",
+    "pydantic>=2.0",
 ]
+
+[project.optional-dependencies]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
+    "ruff>=0.6",
 ]
 
 [project.scripts]
@@ -30,3 +34,11 @@ packages = ["src/aiblueprint_mcp"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
