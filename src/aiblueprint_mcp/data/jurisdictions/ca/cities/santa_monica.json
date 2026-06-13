@@ -1,0 +1,34 @@
+{
+  "jurisdiction_id": "CA-LA-SANTA-MONICA",
+  "name": "City of Santa Monica",
+  "parent": "CA-LA-COUNTY",
+  "disclaimer": "Santa Monica has additional coastal and design review requirements. Verify with Santa Monica Planning & Community Development.",
+  "last_updated": "2024-01",
+  "adu": {
+    "detached": {
+      "max_sqft": 1200,
+      "max_height_ft": 16,
+      "setback_side_ft": 4,
+      "setback_rear_ft": 4,
+      "parking_required": false,
+      "owner_occupancy_required": false,
+      "ministerial_approval": true,
+      "design_review_required": false,
+      "notes": [
+        "Santa Monica is entirely within the Coastal Zone — most ADUs require a Coastal Development Permit (CDP).",
+        "State law streamlines ADU approvals but coastal CDP adds review layer.",
+        "Rent control ordinance may affect ADU rental terms.",
+        "Alley-loaded lots common — rear setback may be measured from alley centerline."
+      ],
+      "citations": {
+        "adu_general": "Santa Monica Municipal Code §9.31.300 (ADU)",
+        "coastal_cdp": "CA Coastal Act §30600 — CDP requirement"
+      }
+    }
+  },
+  "coastal": {
+    "entirely_in_coastal_zone": true,
+    "cdp_required": true,
+    "note": "All of Santa Monica is in the CA Coastal Zone. A Coastal Development Permit is required in addition to standard building permits."
+  }
+}

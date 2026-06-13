@@ -1,0 +1,46 @@
+{
+  "jurisdiction_id": "CA-LA-LOS-ANGELES",
+  "name": "City of Los Angeles",
+  "parent": "CA-LA-COUNTY",
+  "disclaimer": "LA has complex zoning overlays, specific plans, and hillside requirements. Verify with LADBS and LADCP. Rules vary significantly by neighborhood.",
+  "last_updated": "2024-01",
+  "adu": {
+    "detached": {
+      "max_sqft": 1200,
+      "max_height_ft": 16,
+      "setback_side_ft": 4,
+      "setback_rear_ft": 4,
+      "lot_coverage_max_pct": null,
+      "parking_required": false,
+      "owner_occupancy_required": false,
+      "ministerial_approval": true,
+      "design_review_required": false,
+      "notes": [
+        "LA has many overlay zones (Historic Preservation Overlay Zones — HPOZs) that may add design review.",
+        "Hillside areas have additional grading, access, and setback requirements.",
+        "Fire Zone 4 applies to many hillside properties — Class A roofing and ignition-resistant materials required.",
+        "Some specific plans (Venice, Hollywood, etc.) may have additional ADU standards.",
+        "LA City ADU Ordinance (Ord. 186,481) is the primary ADU document."
+      ],
+      "citations": {
+        "adu_general": "LAMC §12.22 A.33 (ADU ordinance — Ord. 186,481)",
+        "setbacks": "LAMC §12.22 A.33(d)(2)"
+      }
+    },
+    "garage_conversion": {
+      "max_sqft": 1200,
+      "replacement_parking_required": false,
+      "notes": [
+        "Garage conversions in LA are very common and streamlined.",
+        "Pre-approved ADU plans available through LADBS."
+      ]
+    },
+    "jadu": {
+      "max_sqft": 500,
+      "owner_occupancy_required": true,
+      "citations": {
+        "general": "LAMC §12.22 A.34 (JADU ordinance)"
+      }
+    }
+  }
+}

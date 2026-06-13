@@ -1,0 +1,26 @@
+{
+  "jurisdiction_id": "CA-SAN-BERNARDINO-COUNTY",
+  "name": "San Bernardino County (Unincorporated)",
+  "parent": "CA",
+  "disclaimer": "Applies only to unincorporated San Bernardino County (largest county in contiguous US). Verify with San Bernardino County Land Use Services.",
+  "last_updated": "2024-01",
+  "adu": {
+    "detached": {
+      "max_sqft": 1200,
+      "max_height_ft": 16,
+      "setback_side_ft": 4,
+      "setback_rear_ft": 4,
+      "parking_required": false,
+      "owner_occupancy_required": false,
+      "ministerial_approval": true,
+      "notes": [
+        "Unincorporated areas include vast desert, mountain, and valley communities.",
+        "Septic system capacity must be confirmed for ADUs outside sewer service areas.",
+        "Desert communities may have different utility availability constraints."
+      ],
+      "citations": {
+        "general": "San Bernardino County Development Code §84.29 (ADU)"
+      }
+    }
+  }
+}

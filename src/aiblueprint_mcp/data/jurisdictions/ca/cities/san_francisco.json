@@ -1,0 +1,35 @@
+{
+  "jurisdiction_id": "CA-SF-SAN-FRANCISCO",
+  "name": "City and County of San Francisco",
+  "parent": "CA-ALAMEDA-COUNTY",
+  "parent_override_note": "San Francisco is a consolidated city-county. For jurisdiction purposes it is treated as both county and city.",
+  "disclaimer": "SF has complex planning rules, historic districts, and discretionary review processes that interact with state ADU law. Verify with SF Planning Dept and SF DBI.",
+  "last_updated": "2024-01",
+  "adu": {
+    "detached": {
+      "max_sqft": 1200,
+      "max_height_ft": 16,
+      "setback_side_ft": 4,
+      "setback_rear_ft": 4,
+      "parking_required": false,
+      "owner_occupancy_required": false,
+      "ministerial_approval": true,
+      "design_review_required": false,
+      "notes": [
+        "SF Planning Code Sections 207.1 and 207.2 govern ADUs.",
+        "Most ADUs in SF are interior conversions of existing space (basement, garage) due to lot density.",
+        "Historic districts (approx. 25% of the city) may have additional design constraints.",
+        "State law preempts most SF discretionary review for ADUs.",
+        "SF's tight lot sizes often mean ADUs are in-law units rather than detached structures."
+      ],
+      "citations": {
+        "adu_general": "SF Planning Code §207.1 (ADU Program)",
+        "state_preemption": "CA Gov Code §65852.2"
+      }
+    },
+    "jadu": {
+      "max_sqft": 500,
+      "owner_occupancy_required": true
+    }
+  }
+}

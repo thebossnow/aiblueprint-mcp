@@ -1,0 +1,29 @@
+{
+  "jurisdiction_id": "CA-LA-PASADENA",
+  "name": "City of Pasadena",
+  "parent": "CA-LA-COUNTY",
+  "disclaimer": "Pasadena has an active Historic Preservation program. Verify with Pasadena Planning & Community Development.",
+  "last_updated": "2024-01",
+  "adu": {
+    "detached": {
+      "max_sqft": 1200,
+      "max_height_ft": 16,
+      "setback_side_ft": 4,
+      "setback_rear_ft": 4,
+      "parking_required": false,
+      "owner_occupancy_required": false,
+      "ministerial_approval": true,
+      "design_review_required": false,
+      "notes": [
+        "Pasadena has numerous historic districts (Bungalow Heaven, Madison Heights, etc.) where additional design review may apply.",
+        "Landmark properties may have additional constraints.",
+        "State law limits historic review powers for ADUs — verify current enforcement position.",
+        "Single-Family Residential (RS) zones are most common; verify specific zone setbacks."
+      ],
+      "citations": {
+        "adu_general": "Pasadena Municipal Code §17.50.310 (ADU)",
+        "historic": "Pasadena Municipal Code Title 17 (Historic Preservation)"
+      }
+    }
+  }
+}

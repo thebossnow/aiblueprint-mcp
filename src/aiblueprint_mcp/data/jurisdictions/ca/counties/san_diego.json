@@ -1,0 +1,52 @@
+{
+  "jurisdiction_id": "CA-SAN-DIEGO-COUNTY",
+  "name": "San Diego County (Unincorporated)",
+  "parent": "CA",
+  "disclaimer": "Applies only to unincorporated county areas. Incorporated cities within San Diego County have their own ordinances. Verify with the San Diego County Department of Planning & Development Services.",
+  "last_updated": "2024-01",
+  "adu": {
+    "detached": {
+      "max_sqft": 1200,
+      "max_height_ft": 16,
+      "setback_side_ft": 4,
+      "setback_rear_ft": 4,
+      "parking_required": false,
+      "owner_occupancy_required": false,
+      "ministerial_approval": true,
+      "design_review_required": false,
+      "notes": [
+        "County largely mirrors state ADU law. Verify current County ADU ordinance at PDS.",
+        "Fire Safety Areas (FSA) may impose additional construction requirements (ignition-resistant materials, Class A roofing).",
+        "Grading permit required for cut/fill exceeding 50 cubic yards."
+      ],
+      "citations": {
+        "general": "San Diego County Zoning Ordinance §6156.x (ADU regulations)",
+        "fire_safety": "San Diego County Fire Code — Fire Safety Areas"
+      }
+    },
+    "garage_conversion": {
+      "max_sqft": 1200,
+      "setback_note": "Existing structure setbacks maintained per state law.",
+      "parking_required": false,
+      "replacement_parking_required": false
+    },
+    "jadu": {
+      "max_sqft": 500,
+      "owner_occupancy_required": true
+    }
+  },
+  "fire": {
+    "default_hazard_note": "Much of unincorporated San Diego County is in SRA (State Responsibility Area) or VHFHSZ. Verify parcel-level designation at CAL FIRE.",
+    "wui_construction_required": true,
+    "class_a_roofing_required": true,
+    "citations": {
+      "wui": "CA Building Code Chapter 7A; San Diego County Local Amendments"
+    }
+  },
+  "grading": {
+    "permit_required_cut_fill_yd3": 50,
+    "citations": {
+      "grading": "San Diego County Grading, Clearing and Watercourses Ordinance"
+    }
+  }
+}
