@@ -1,0 +1,26 @@
+{
+  "jurisdiction_id": "CA-LA-LONG-BEACH",
+  "name": "City of Long Beach",
+  "parent": "CA-LA-COUNTY",
+  "disclaimer": "Verify with Long Beach Development Services. Some areas have Coastal Zone or historic district overlays.",
+  "last_updated": "2024-01",
+  "adu": {
+    "detached": {
+      "max_sqft": 1200,
+      "max_height_ft": 16,
+      "setback_side_ft": 4,
+      "setback_rear_ft": 4,
+      "parking_required": false,
+      "owner_occupancy_required": false,
+      "ministerial_approval": true,
+      "notes": [
+        "Long Beach ADU ordinance conforms to state law.",
+        "Naples and Belmont Shore areas may have coastal or specific plan overlays.",
+        "City offers ADU pre-approval program."
+      ],
+      "citations": {
+        "adu_general": "Long Beach Municipal Code §21.51.030 (ADU)"
+      }
+    }
+  }
+}

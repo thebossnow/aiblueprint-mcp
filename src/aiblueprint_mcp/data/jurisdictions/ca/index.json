@@ -1,0 +1,32 @@
+{
+  "_note": "Canonical name → relative JSON path within this directory. Names are lowercase-normalised for matching.",
+  "counties": {
+    "san diego": "counties/san_diego.json",
+    "los angeles": "counties/los_angeles.json",
+    "orange": "counties/orange.json",
+    "alameda": "counties/alameda.json",
+    "santa clara": "counties/santa_clara.json",
+    "sacramento": "counties/sacramento.json",
+    "riverside": "counties/riverside.json",
+    "ventura": "counties/ventura.json",
+    "contra costa": "counties/contra_costa.json",
+    "san bernardino": "counties/san_bernardino.json"
+  },
+  "cities": {
+    "san diego": "cities/san_diego.json",
+    "los angeles": "cities/los_angeles.json",
+    "encinitas": "cities/encinitas.json",
+    "san jose": "cities/san_jose.json",
+    "san francisco": "cities/san_francisco.json",
+    "irvine": "cities/irvine.json",
+    "santa monica": "cities/santa_monica.json",
+    "pasadena": "cities/pasadena.json",
+    "long beach": "cities/long_beach.json",
+    "oakland": "cities/oakland.json",
+    "chula vista": "cities/chula_vista.json",
+    "santa ana": "cities/santa_ana.json",
+    "anaheim": "cities/anaheim.json",
+    "sunnyvale": "cities/sunnyvale.json",
+    "sacramento": "cities/sacramento.json"
+  }
+}

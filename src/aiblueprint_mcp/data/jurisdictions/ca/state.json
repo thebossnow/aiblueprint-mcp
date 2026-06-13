@@ -1,0 +1,144 @@
+{
+  "jurisdiction_id": "CA",
+  "name": "State of California",
+  "parent": null,
+  "disclaimer": "This data reflects California law as understood in early 2024. Local ordinances and state law change frequently. Always verify with the applicable building department and a licensed design professional before relying on these values for permit submission.",
+  "last_updated": "2024-01",
+  "code_editions": {
+    "building": "CBC 2022",
+    "residential": "CRC 2022",
+    "energy": "Title 24 2022",
+    "green": "CALGreen 2022"
+  },
+  "adu": {
+    "detached": {
+      "max_sqft": 1200,
+      "max_height_ft": 16,
+      "max_height_ft_near_transit": 18,
+      "setback_side_ft": 4,
+      "setback_rear_ft": 4,
+      "setback_front_ft": null,
+      "lot_coverage_max_pct": null,
+      "parking_required": false,
+      "fire_sprinklers": "if_primary_requires",
+      "solar_required": true,
+      "owner_occupancy_required": false,
+      "ministerial_approval": true,
+      "design_review_required": false,
+      "impact_fees_waived_under_sqft": 750,
+      "max_per_lot": 1,
+      "min_lot_size_sqft": null,
+      "notes": [
+        "Owner occupancy requirement removed through Jan 1 2030 by AB 976 (2023).",
+        "Height may be 18 ft if within 1/2 mile of a major transit stop per SB 897.",
+        "Garage conversion ADUs keep existing structure setbacks; no new setback required.",
+        "Solar PV system required per Title 24 2022 Part 6 §150.1(c)14; small ADU exceptions may apply.",
+        "Impact fees are waived for ADUs 750 sq ft or smaller per CA Gov Code §65852.2(f)(2)."
+      ],
+      "citations": {
+        "max_sqft": "CA Gov Code §65852.2(a)(1)(B)",
+        "max_height_ft": "CA Gov Code §65852.2(c)(2)(B)",
+        "setback_side_ft": "CA Gov Code §65852.2(a)(4)(A)",
+        "setback_rear_ft": "CA Gov Code §65852.2(a)(4)(A)",
+        "parking_required": "CA Gov Code §65852.2(d)",
+        "ministerial_approval": "CA Gov Code §65852.2(a)(3)",
+        "design_review_required": "CA Gov Code §65852.2(a)(3)",
+        "impact_fees_waived_under_sqft": "CA Gov Code §65852.2(f)(2)",
+        "owner_occupancy_required": "AB 976 (2023), extending SB 13 (2019) moratorium through 2030",
+        "solar_required": "CA Title 24 2022 Part 6 §150.1(c)14"
+      }
+    },
+    "attached": {
+      "max_sqft": 1200,
+      "max_sqft_rule": "min(1200, 0.5 * primary_sqft)",
+      "max_height_ft": null,
+      "max_height_note": "Attached ADU may match primary dwelling height; consult local ordinance for cap.",
+      "setback_side_ft": 4,
+      "setback_rear_ft": 4,
+      "setback_front_ft": null,
+      "lot_coverage_max_pct": null,
+      "parking_required": false,
+      "fire_sprinklers": "if_primary_requires",
+      "solar_required": true,
+      "owner_occupancy_required": false,
+      "ministerial_approval": true,
+      "design_review_required": false,
+      "max_per_lot": 1,
+      "notes": [
+        "Floor area may not exceed 50% of primary dwelling or 1,200 sq ft, whichever is less.",
+        "Setbacks match detached; existing wall may not require additional setback."
+      ],
+      "citations": {
+        "max_sqft": "CA Gov Code §65852.2(a)(1)(B)",
+        "ministerial_approval": "CA Gov Code §65852.2(a)(3)"
+      }
+    },
+    "garage_conversion": {
+      "max_sqft": 1200,
+      "max_height_ft": null,
+      "setback_side_ft": null,
+      "setback_rear_ft": null,
+      "setback_note": "Existing structure setbacks apply; no new setback required for conversion.",
+      "parking_required": false,
+      "replacement_parking_required": false,
+      "fire_sprinklers": "if_primary_requires",
+      "solar_required": true,
+      "owner_occupancy_required": false,
+      "ministerial_approval": true,
+      "design_review_required": false,
+      "notes": [
+        "Replacement parking spaces are NOT required when garage is converted to ADU (SB 9 / AB 2221).",
+        "Existing non-conforming setbacks may be maintained.",
+        "Interior conversion: may not require full ADU setbacks from property line."
+      ],
+      "citations": {
+        "replacement_parking_required": "CA Gov Code §65852.2(d)(1)(C)",
+        "setback_note": "CA Gov Code §65852.2(a)(4)(B) — existing structure setbacks apply"
+      }
+    },
+    "jadu": {
+      "max_sqft": 500,
+      "max_height_ft": null,
+      "setback_side_ft": null,
+      "setback_rear_ft": null,
+      "setback_note": "JADU must be within or attached to existing or proposed primary dwelling; existing setbacks apply.",
+      "parking_required": false,
+      "fire_sprinklers": "if_primary_requires",
+      "solar_required": false,
+      "owner_occupancy_required": true,
+      "ministerial_approval": true,
+      "design_review_required": false,
+      "max_per_lot": 1,
+      "notes": [
+        "JADU must be entirely within the existing or proposed primary dwelling or attached garage.",
+        "Owner must occupy EITHER the primary dwelling or the JADU.",
+        "JADU must have an efficiency kitchen with cooking appliance and sink.",
+        "Separate exterior access required.",
+        "Interior access between primary and JADU must exist (door may be lockable)."
+      ],
+      "citations": {
+        "max_sqft": "CA Gov Code §65852.22(a)",
+        "owner_occupancy_required": "CA Gov Code §65852.22(a)(3)"
+      }
+    }
+  },
+  "residential": {
+    "smoke_detectors_required": true,
+    "co_detectors_required": true,
+    "co_detector_upgrade_on_addition": true,
+    "smoke_detector_upgrade_on_addition": true,
+    "egress_window_required_per_bedroom": true,
+    "egress_window_min_clear_sqft": 5.7,
+    "egress_window_min_clear_height_in": 24,
+    "egress_window_min_clear_width_in": 20,
+    "min_ceiling_height_ft": 7.0,
+    "min_habitable_room_sqft": 70,
+    "citations": {
+      "egress_window_min_clear_sqft": "CRC 2022 §R310.2.1",
+      "min_ceiling_height_ft": "CRC 2022 §R305.1",
+      "min_habitable_room_sqft": "CRC 2022 §R304.1",
+      "co_detectors_required": "CA Health & Safety Code §17926",
+      "smoke_detectors_required": "CA Health & Safety Code §13113.7"
+    }
+  }
+}

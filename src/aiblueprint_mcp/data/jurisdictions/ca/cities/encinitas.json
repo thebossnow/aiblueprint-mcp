@@ -1,0 +1,38 @@
+{
+  "jurisdiction_id": "CA-SD-ENCINITAS",
+  "name": "City of Encinitas",
+  "parent": "CA-SAN-DIEGO-COUNTY",
+  "disclaimer": "Verify current standards with the City of Encinitas Development Services Department. Coastal areas are also subject to Coastal Commission review.",
+  "last_updated": "2024-01",
+  "adu": {
+    "detached": {
+      "max_sqft": 1200,
+      "max_height_ft": 16,
+      "setback_side_ft": 4,
+      "setback_rear_ft": 4,
+      "lot_coverage_max_pct": 50,
+      "parking_required": false,
+      "owner_occupancy_required": false,
+      "ministerial_approval": true,
+      "design_review_required": false,
+      "notes": [
+        "Coastal Zone properties may require a Coastal Development Permit (CDP) — verify at CA Coastal Commission.",
+        "Encinitas Municipal Code adopted ADU regulations consistent with state law.",
+        "Some properties in the Cardiff-by-the-Sea and Olivenhain areas have specific overlay zones."
+      ],
+      "citations": {
+        "lot_coverage": "Encinitas Municipal Code §30.16.010",
+        "adu_general": "Encinitas Municipal Code §30.48"
+      }
+    },
+    "jadu": {
+      "max_sqft": 500,
+      "owner_occupancy_required": true
+    }
+  },
+  "coastal": {
+    "coastal_zone_applies_to_some_parcels": true,
+    "cdp_may_be_required": true,
+    "note": "Properties west of Interstate 5 or within the Coastal Zone boundary require Coastal Development Permit review. Confirm at City Planning or CA Coastal Commission."
+  }
+}

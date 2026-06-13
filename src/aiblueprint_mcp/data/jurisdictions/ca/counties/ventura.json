@@ -1,0 +1,29 @@
+{
+  "jurisdiction_id": "CA-VENTURA-COUNTY",
+  "name": "Ventura County (Unincorporated)",
+  "parent": "CA",
+  "disclaimer": "Applies only to unincorporated Ventura County. Verify with Ventura County Planning Division.",
+  "last_updated": "2024-01",
+  "adu": {
+    "detached": {
+      "max_sqft": 1200,
+      "max_height_ft": 16,
+      "setback_side_ft": 4,
+      "setback_rear_ft": 4,
+      "parking_required": false,
+      "owner_occupancy_required": false,
+      "ministerial_approval": true,
+      "notes": [
+        "Significant portions of unincorporated Ventura County are in VHFHSZ.",
+        "WUI construction standards (Chapter 7A CBC) likely apply in many areas."
+      ],
+      "citations": {
+        "general": "Ventura County Non-Coastal Zoning Ordinance §8105.12 (ADU)"
+      }
+    }
+  },
+  "fire": {
+    "vhfhsz_note": "Large portions in VHFHSZ; verify at CAL FIRE map viewer.",
+    "wui_construction_required": true
+  }
+}

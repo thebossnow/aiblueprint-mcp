@@ -1,0 +1,38 @@
+{
+  "jurisdiction_id": "CA-LA-COUNTY",
+  "name": "Los Angeles County (Unincorporated)",
+  "parent": "CA",
+  "disclaimer": "Applies only to unincorporated LA County areas. Most of the population lives in incorporated cities with their own codes. Verify with LA County Department of Regional Planning.",
+  "last_updated": "2024-01",
+  "adu": {
+    "detached": {
+      "max_sqft": 1200,
+      "max_height_ft": 16,
+      "setback_side_ft": 4,
+      "setback_rear_ft": 4,
+      "parking_required": false,
+      "owner_occupancy_required": false,
+      "ministerial_approval": true,
+      "design_review_required": false,
+      "notes": [
+        "LA County adopted an ADU ordinance aligning with state law.",
+        "Hillside and Very High Fire Hazard Severity Zones have additional construction requirements.",
+        "Grading on slopes may require geotechnical report."
+      ],
+      "citations": {
+        "general": "LA County Code Title 22 §22.56.215 (ADU regulations)"
+      }
+    },
+    "jadu": {
+      "max_sqft": 500,
+      "owner_occupancy_required": true
+    }
+  },
+  "fire": {
+    "vhfhsz_applies": true,
+    "vhfhsz_note": "Large portions of unincorporated LA County are in VHFHSZ. Verify at CAL FIRE or LA County Fire.",
+    "citations": {
+      "vhfhsz": "CA Gov Code §51177; LA County Fire Dept VHFHSZ maps"
+    }
+  }
+}

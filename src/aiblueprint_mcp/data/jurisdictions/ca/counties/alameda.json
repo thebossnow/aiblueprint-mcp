@@ -1,0 +1,25 @@
+{
+  "jurisdiction_id": "CA-ALAMEDA-COUNTY",
+  "name": "Alameda County (Unincorporated)",
+  "parent": "CA",
+  "disclaimer": "Applies only to unincorporated Alameda County areas. Verify with Alameda County Planning Department.",
+  "last_updated": "2024-01",
+  "adu": {
+    "detached": {
+      "max_sqft": 1200,
+      "max_height_ft": 16,
+      "setback_side_ft": 4,
+      "setback_rear_ft": 4,
+      "parking_required": false,
+      "owner_occupancy_required": false,
+      "ministerial_approval": true,
+      "notes": [
+        "Unincorporated areas include Castro Valley, San Lorenzo, Fairview, Cherryland.",
+        "Hillside areas may require geotechnical investigation."
+      ],
+      "citations": {
+        "general": "Alameda County Zoning Ordinance Chapter 6 (ADU)"
+      }
+    }
+  }
+}

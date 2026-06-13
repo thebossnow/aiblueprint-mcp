@@ -1,0 +1,44 @@
+{
+  "jurisdiction_id": "CA-SD-SAN-DIEGO",
+  "name": "City of San Diego",
+  "parent": "CA-SAN-DIEGO-COUNTY",
+  "disclaimer": "Verify with the City of San Diego Development Services Department. Active ADU ordinance revisions are frequent.",
+  "last_updated": "2024-01",
+  "adu": {
+    "detached": {
+      "max_sqft": 1200,
+      "max_height_ft": 24,
+      "max_height_ft_note": "San Diego allows up to 24 ft for detached ADU with a habitable attic space; standard 2-story limit 20 ft; 1-story 16 ft.",
+      "setback_side_ft": 4,
+      "setback_rear_ft": 4,
+      "lot_coverage_max_pct": null,
+      "parking_required": false,
+      "owner_occupancy_required": false,
+      "ministerial_approval": true,
+      "design_review_required": false,
+      "notes": [
+        "City of San Diego has one of the most ADU-permissive ordinances in California.",
+        "Up to 4 ADUs possible on some lots under City's multi-unit ADU rules.",
+        "Coastal Overlay zones require CDP — verify at City Planning or CA Coastal Commission.",
+        "City has its own ADU pre-approved plan program (Companion Unit program).",
+        "Height up to 24 ft allowed for 2-story detached ADU per SDMC §141.0302."
+      ],
+      "citations": {
+        "max_height_ft": "SDMC §141.0302(b)(3)",
+        "adu_general": "SDMC §141.0302",
+        "ministerial": "SDMC §141.0302(d)"
+      }
+    },
+    "jadu": {
+      "max_sqft": 500,
+      "owner_occupancy_required": true,
+      "citations": {
+        "general": "SDMC §141.0304"
+      }
+    }
+  },
+  "coastal": {
+    "coastal_zone_applies_to_some_parcels": true,
+    "cdp_may_be_required": true
+  }
+}

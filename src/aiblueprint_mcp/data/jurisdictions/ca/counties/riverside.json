@@ -1,0 +1,25 @@
+{
+  "jurisdiction_id": "CA-RIVERSIDE-COUNTY",
+  "name": "Riverside County (Unincorporated)",
+  "parent": "CA",
+  "disclaimer": "Applies only to unincorporated Riverside County. Verify with Riverside County Planning Department.",
+  "last_updated": "2024-01",
+  "adu": {
+    "detached": {
+      "max_sqft": 1200,
+      "max_height_ft": 16,
+      "setback_side_ft": 4,
+      "setback_rear_ft": 4,
+      "parking_required": false,
+      "owner_occupancy_required": false,
+      "ministerial_approval": true,
+      "notes": [
+        "Riverside County ADU Ordinance No. 348 aligns with state law.",
+        "Large lots in rural zones may be in SRA requiring fire-safe construction."
+      ],
+      "citations": {
+        "general": "Riverside County Ordinance No. 348 (Zoning, ADU provisions)"
+      }
+    }
+  }
+}

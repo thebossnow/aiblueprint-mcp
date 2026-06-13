@@ -1,0 +1,25 @@
+{
+  "jurisdiction_id": "CA-CONTRA-COSTA-COUNTY",
+  "name": "Contra Costa County (Unincorporated)",
+  "parent": "CA",
+  "disclaimer": "Applies only to unincorporated Contra Costa County. Verify with Contra Costa County Dept. of Conservation & Development.",
+  "last_updated": "2024-01",
+  "adu": {
+    "detached": {
+      "max_sqft": 1200,
+      "max_height_ft": 16,
+      "setback_side_ft": 4,
+      "setback_rear_ft": 4,
+      "parking_required": false,
+      "owner_occupancy_required": false,
+      "ministerial_approval": true,
+      "notes": [
+        "Unincorporated areas include Bay Point, Kensington, Rodeo, North Richmond, Alamo.",
+        "ADU ordinance aligns with state law."
+      ],
+      "citations": {
+        "general": "Contra Costa County Ordinance Code §88-36 (ADU)"
+      }
+    }
+  }
+}

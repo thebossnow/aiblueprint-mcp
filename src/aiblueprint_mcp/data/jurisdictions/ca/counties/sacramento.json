@@ -1,0 +1,25 @@
+{
+  "jurisdiction_id": "CA-SACRAMENTO-COUNTY",
+  "name": "Sacramento County (Unincorporated)",
+  "parent": "CA",
+  "disclaimer": "Applies only to unincorporated Sacramento County. Verify with Sacramento County Planning & Environmental Review.",
+  "last_updated": "2024-01",
+  "adu": {
+    "detached": {
+      "max_sqft": 1200,
+      "max_height_ft": 16,
+      "setback_side_ft": 4,
+      "setback_rear_ft": 4,
+      "parking_required": false,
+      "owner_occupancy_required": false,
+      "ministerial_approval": true,
+      "notes": [
+        "Sacramento County ADU ordinance mirrors state law.",
+        "Unincorporated areas include Arden-Arcade, Citrus Heights (now incorporated), Elk Grove portion."
+      ],
+      "citations": {
+        "general": "Sacramento County Zoning Code §§ (ADU regulations)"
+      }
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "jurisdiction_id": "CA-SC-SAN-JOSE",
+  "name": "City of San José",
+  "parent": "CA-SANTA-CLARA-COUNTY",
+  "disclaimer": "Verify with City of San José Planning Division and Building Division. San José has an active ADU program.",
+  "last_updated": "2024-01",
+  "adu": {
+    "detached": {
+      "max_sqft": 1200,
+      "max_height_ft": 16,
+      "setback_side_ft": 4,
+      "setback_rear_ft": 4,
+      "lot_coverage_max_pct": null,
+      "parking_required": false,
+      "owner_occupancy_required": false,
+      "ministerial_approval": true,
+      "design_review_required": false,
+      "notes": [
+        "San José has a streamlined ADU permit process.",
+        "City offers pre-approved ADU plans to reduce permit timeline.",
+        "Some Specific Plan areas (Alviso, Rincon South) may have additional rules.",
+        "Hillside areas subject to additional grading and geotechnical requirements."
+      ],
+      "citations": {
+        "adu_general": "San José Municipal Code §20.80 (ADU regulations)",
+        "pre-approved plans": "City of San José ADU Pre-Approved Plans Program"
+      }
+    },
+    "jadu": {
+      "max_sqft": 500,
+      "owner_occupancy_required": true
+    }
+  }
+}

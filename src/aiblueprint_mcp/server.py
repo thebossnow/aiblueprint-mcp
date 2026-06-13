@@ -1,6 +1,6 @@
-"""AIBlueprint MCP Server — 6 consolidated tools for site-plan drafting.
+"""AIBlueprint MCP Server — 8 tools for site-plan drafting + jurisdiction compliance.
 
-Tools: drawing, entity, layer, block, annotation, view
+Tools: drawing, entity, layer, block, annotation, view, project, compliance
 
 Each tool validates its input against a per-operation schema (validation.py),
 then dispatches to operation-specific backend methods.
@@ -14,12 +14,15 @@ import structlog
 from mcp.server.fastmcp import FastMCP, Image
 
 from aiblueprint_mcp.backend import AIBlueprintBackend
+from aiblueprint_mcp.compliance_engine import ComplianceEngine
+from aiblueprint_mcp.project_state import ProjectSession
 from aiblueprint_mcp.validation import ValidationError, validate
 
 log = structlog.get_logger()
 mcp = FastMCP("aiblueprint-mcp")
 
 _backend: AIBlueprintBackend | None = None
+_project: ProjectSession | None = None
 
 
 async def _get_backend() -> AIBlueprintBackend:
@@ -314,6 +317,203 @@ async def view(operation: str, data: dict | None = None):
     else:
         return _err(f"Unknown view operation: {operation}")
     return _result(r)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# 7. project — Jurisdiction-aware intake questionnaire
+# ═══════════════════════════════════════════════════════════════════════
+
+def _get_project() -> ProjectSession:
+    global _project
+    if _project is None:
+        _project = ProjectSession()
+    return _project
+
+
+@mcp.tool()
+async def project(operation: str, data: dict | None = None) -> str:
+    """Project intake questionnaire and jurisdiction rule resolver.
+
+    Before drawing, use this tool to collect project and location details.
+    It resolves a layered rule set: CA state → county → city → HOA/CC&Rs,
+    always taking the most restrictive value at each layer.
+
+    Operations:
+      start    — Start a fresh intake (resets any existing session).
+      question — Get the next question to ask the user. Returns question
+                 details: id, text, help, type, options, step, total_steps.
+      answer   — Submit an answer. data: {question_id, value}
+      profile  — Get the fully resolved project profile + requirements + citations.
+                 Available at any point; complete after all questions are answered.
+      status   — Show questionnaire progress (answered / total / percent).
+      reset    — Clear the session and start over.
+      counties — List all CA counties in the database.
+      cities   — List all CA cities in the database.
+    """
+    data = data or {}
+    p = _get_project()
+
+    if operation == "start":
+        p.reset()
+        q = p.next_question()
+        return _ok({
+            "message": "Project intake started. Use project('question') to get the first question.",
+            "first_question": _format_question(q) if q else None,
+        })
+
+    elif operation == "question":
+        q = p.next_question()
+        if q is None:
+            return _ok({"complete": True, "message": "All questions answered. Use project('profile') to see requirements."})
+        return _ok({"complete": False, **_format_question(q)})
+
+    elif operation == "answer":
+        qid = data.get("question_id")
+        value = data.get("value")
+        if not qid:
+            return _err("answer requires data: {question_id, value}")
+        next_q = p.answer(qid, value)
+        prog = p.progress()
+        if next_q is None:
+            return _ok({
+                "recorded": {qid: value},
+                "progress": prog,
+                "complete": True,
+                "message": "All questions answered. Use project('profile') for your resolved requirements.",
+            })
+        return _ok({
+            "recorded": {qid: value},
+            "progress": prog,
+            "complete": False,
+            "next_question": _format_question(next_q),
+        })
+
+    elif operation == "profile":
+        profile = p.resolved_profile()
+        return _ok({"profile": profile})
+
+    elif operation == "status":
+        return _ok({"progress": p.progress(), "answers": p.all_answers()})
+
+    elif operation == "reset":
+        p.reset()
+        return _ok({"message": "Project session cleared."})
+
+    elif operation == "counties":
+        from aiblueprint_mcp.jurisdiction import JurisdictionLoader
+        loader = JurisdictionLoader("ca")
+        return _ok({"counties": [c.title() for c in loader.known_counties()]})
+
+    elif operation == "cities":
+        from aiblueprint_mcp.jurisdiction import JurisdictionLoader
+        loader = JurisdictionLoader("ca")
+        return _ok({"cities": [c.title() for c in loader.known_cities()]})
+
+    else:
+        return _err(f"Unknown project operation: {operation}")
+
+
+def _format_question(q) -> dict:
+    return {
+        "question_id": q.id,
+        "question": q.text,
+        "help": q.help,
+        "type": q.type,
+        "options": q.options,
+        "unit": q.unit,
+        "required": q.required,
+        "step": q.step,
+        "total_steps": q.total_steps,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# 8. compliance — Check drawing geometry against project requirements
+# ═══════════════════════════════════════════════════════════════════════
+
+@mcp.tool()
+async def compliance(operation: str, data: dict | None = None) -> str:
+    """Check drawing geometry against the resolved project requirements.
+
+    Requires: a project profile (run project tool first) and an open drawing
+    with entity handles for the property boundary and ADU footprint.
+
+    Operations:
+      check_area     — Verify ADU footprint sq ft against max_sqft.
+                       data: {footprint_handle}
+      check_setbacks — Draw the setback envelope and verify ADU is inside.
+                       data: {boundary_handle, footprint_handle}
+      check_coverage — Verify total lot coverage %.
+                       data: {boundary_handle, structure_handles: [h1, h2, ...]}
+      check_height   — Verify ridge height against max_height_ft.
+                       data: {elevation_handle, ridge_y, grade_y}
+      report         — Run all applicable checks and return a full report.
+                       data: {boundary_handle?, footprint_handle?, structure_handles?}
+      requirements   — Show the effective requirements for this project (no geometry needed).
+    """
+    data = data or {}
+    p = _get_project()
+    b = await _get_backend()
+
+    if operation == "requirements":
+        profile = p.resolved_profile()
+        if not profile:
+            return _err("No project profile yet. Complete the project intake first.")
+        return _ok({
+            "effective_requirements": profile.get("requirements", {}),
+            "warnings": profile.get("warnings", []),
+            "notes": profile.get("notes", []),
+            "disclaimers": profile.get("disclaimers", []),
+        })
+
+    profile = p.resolved_profile()
+    if not profile:
+        return _err("No project profile. Run project('start') and answer questions first.")
+
+    engine = ComplianceEngine(b, profile)
+
+    if operation == "check_area":
+        h = data.get("footprint_handle")
+        if not h:
+            return _err("check_area requires data: {footprint_handle}")
+        result = await engine.check_area(h)
+        return _ok(result.to_dict())
+
+    elif operation == "check_setbacks":
+        bh = data.get("boundary_handle")
+        fh = data.get("footprint_handle")
+        if not bh or not fh:
+            return _err("check_setbacks requires data: {boundary_handle, footprint_handle}")
+        result = await engine.check_setbacks(bh, fh)
+        return _ok(result.to_dict())
+
+    elif operation == "check_coverage":
+        bh = data.get("boundary_handle")
+        sh = data.get("structure_handles", [])
+        if not bh:
+            return _err("check_coverage requires data: {boundary_handle, structure_handles}")
+        result = await engine.check_lot_coverage(bh, sh)
+        return _ok(result.to_dict())
+
+    elif operation == "check_height":
+        eh = data.get("elevation_handle")
+        ridge_y = data.get("ridge_y")
+        grade_y = data.get("grade_y")
+        if ridge_y is None or grade_y is None:
+            return _err("check_height requires data: {elevation_handle?, ridge_y, grade_y}")
+        result = await engine.check_height(eh, float(ridge_y), float(grade_y))
+        return _ok(result.to_dict())
+
+    elif operation == "report":
+        report = await engine.full_report(
+            property_boundary_handle=data.get("boundary_handle"),
+            adu_footprint_handle=data.get("footprint_handle"),
+            all_structure_handles=data.get("structure_handles"),
+        )
+        return _ok(report)
+
+    else:
+        return _err(f"Unknown compliance operation: {operation}")
 
 
 async def main():

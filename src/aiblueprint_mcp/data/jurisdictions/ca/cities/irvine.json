@@ -1,0 +1,30 @@
+{
+  "jurisdiction_id": "CA-OC-IRVINE",
+  "name": "City of Irvine",
+  "parent": "CA-ORANGE-COUNTY",
+  "disclaimer": "Irvine has significant HOA coverage (many neighborhoods within the Irvine Company master plan). CC&Rs often impose standards beyond the municipal code. Verify with City of Irvine Planning and your HOA/CC&Rs.",
+  "last_updated": "2024-01",
+  "adu": {
+    "detached": {
+      "max_sqft": 1200,
+      "max_height_ft": 16,
+      "setback_side_ft": 4,
+      "setback_rear_ft": 4,
+      "parking_required": false,
+      "owner_occupancy_required": false,
+      "ministerial_approval": true,
+      "design_review_required": false,
+      "notes": [
+        "Most of Irvine is governed by planned community zoning (PC zone).",
+        "HOA/CC&Rs are prevalent and may restrict ADU appearance, materials, colors — these are private restrictions.",
+        "State law preempts CC&Rs that effectively prohibit ADUs, but architectural standards may still apply.",
+        "Verify with HOA architectural review committee BEFORE finalizing design."
+      ],
+      "citations": {
+        "adu_general": "Irvine City Code §2-6-7 (ADU regulations)",
+        "hoa_preemption": "CA Civ Code §4751 — HOAs cannot prohibit ADUs"
+      }
+    },
+    "hoa_note": "CA Civil Code §4751 prohibits HOAs from banning ADUs, but they can impose reasonable design standards. Document CC&R restrictions and resolve before permit application."
+  }
+}

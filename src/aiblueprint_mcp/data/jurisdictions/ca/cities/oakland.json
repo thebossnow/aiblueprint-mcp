@@ -1,0 +1,38 @@
+{
+  "jurisdiction_id": "CA-ALA-OAKLAND",
+  "name": "City of Oakland",
+  "parent": "CA-ALAMEDA-COUNTY",
+  "disclaimer": "Verify with Oakland Planning & Building Department. Oakland has a proactive ADU program.",
+  "last_updated": "2024-01",
+  "adu": {
+    "detached": {
+      "max_sqft": 1200,
+      "max_height_ft": 16,
+      "setback_side_ft": 4,
+      "setback_rear_ft": 4,
+      "parking_required": false,
+      "owner_occupancy_required": false,
+      "ministerial_approval": true,
+      "design_review_required": false,
+      "notes": [
+        "Oakland has a robust ADU pre-approved plan library (Oakland Standard Plans).",
+        "Hillside areas require Hillside Development Permit and geotechnical review.",
+        "Oakland Hills fire history means WUI-area properties require ignition-resistant construction.",
+        "Oakland's ADU Pilot Program offers pre-approved designs with fast-track permitting."
+      ],
+      "citations": {
+        "adu_general": "Oakland Planning Code §17.103 (ADU regulations)",
+        "hillside": "Oakland Municipal Code §15.04.780 (Hillside Development)"
+      }
+    },
+    "jadu": {
+      "max_sqft": 500,
+      "owner_occupancy_required": true
+    }
+  },
+  "fire": {
+    "hillside_fire_risk": true,
+    "wui_construction_required": "in_high_fire_severity_zones",
+    "note": "Oakland Hills (above Hwy 13 and Hwy 24 in parts) experienced the 1991 firestorm. High Fire Severity Zone designation applies to many hillside parcels."
+  }
+}

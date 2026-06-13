@@ -1,0 +1,25 @@
+{
+  "jurisdiction_id": "CA-ORANGE-COUNTY",
+  "name": "Orange County (Unincorporated)",
+  "parent": "CA",
+  "disclaimer": "Applies only to unincorporated Orange County. Most OC residents are in incorporated cities. Verify with OC Planning & Design Division.",
+  "last_updated": "2024-01",
+  "adu": {
+    "detached": {
+      "max_sqft": 1200,
+      "max_height_ft": 16,
+      "setback_side_ft": 4,
+      "setback_rear_ft": 4,
+      "parking_required": false,
+      "owner_occupancy_required": false,
+      "ministerial_approval": true,
+      "notes": [
+        "Orange County ADU ordinance generally follows state law.",
+        "Unincorporated areas include Coto de Caza, Ladera Ranch, Rossmoor, Midway City, etc."
+      ],
+      "citations": {
+        "general": "OC Codified Ordinance Title 7 §7-9-148 (ADU regulations)"
+      }
+    }
+  }
+}
