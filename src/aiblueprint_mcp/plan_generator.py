@@ -200,19 +200,14 @@ class SitePlanGenerator:
         ov = self._DIM
         m = 8.0
 
-        # Lot overall: width below, depth to the right
+        # Lot overall: width below lot, depth to the right of lot
         await self._b.create_dimension_aligned(0, 0, d.lot_w, 0, -m, ov)
         await self._b.create_dimension_aligned(d.lot_w, 0, d.lot_w, d.lot_d, m, ov)
-        # ADU: width below ADU, depth to the right of ADU
-        await self._b.create_dimension_aligned(d.adu_x, d.adu_y, d.adu_x2, d.adu_y, -4.0, ov)
+        # ADU: width 6 ft below ADU bottom edge, depth 4 ft right of ADU right edge.
+        # Setback zones (4 ft typical) are too narrow for clean dimension lines —
+        # those values are communicated by the annotation text callouts instead.
+        await self._b.create_dimension_aligned(d.adu_x, d.adu_y, d.adu_x2, d.adu_y, -6.0, ov)
         await self._b.create_dimension_aligned(d.adu_x2, d.adu_y, d.adu_x2, d.adu_y2, 4.0, ov)
-        # Left side setback (horizontal, just above mid-height of ADU)
-        mid_y = d.adu_y + d.adu_d / 2
-        await self._b.create_dimension_aligned(0, mid_y, d.side_sb, mid_y, 2.5, ov)
-        # Rear setback (vertical, offset to the right)
-        await self._b.create_dimension_aligned(
-            d.adu_cx, d.lot_d - d.rear_sb, d.adu_cx, d.lot_d, 3.0, ov
-        )
 
     async def _add_annotations(self, d: _Dims, profile: dict[str, Any]) -> None:
         t = self._b.create_text
@@ -225,14 +220,19 @@ class SitePlanGenerator:
         await t(d.adu_cx, d.adu_cy + 1.5, "PROPOSED ADU", height=2.0, layer="ANNOTATION")
         await t(d.adu_cx, d.adu_cy - 1.5, f"{d.adu_area:.0f} SF", height=1.75, layer="ANNOTATION")
 
-        # Setback annotations
+        # Setback callout labels — placed OUTSIDE the lot so they don't crowd the
+        # 4 ft setback zones. Arrows point toward the setback line via leader-style text.
         mid_y = d.adu_y + d.adu_d / 2
-        await t(d.side_sb / 2, mid_y,
-                f"{d.side_sb:.0f}'", height=1.5, rotation=90.0, layer="ANNOTATION")
-        await t(d.lot_w - d.side_sb / 2, mid_y,
-                f"{d.side_sb:.0f}'", height=1.5, rotation=90.0, layer="ANNOTATION")
-        await t(d.adu_cx, d.lot_d - d.rear_sb / 2,
-                f"{d.rear_sb:.0f}' REAR SETBACK", height=1.5, layer="ANNOTATION")
+        # Left side: outside the lot to the left
+        await t(-8.0, mid_y + 2.0, f"{d.side_sb:.0f}' SIDE", height=1.5, layer="ANNOTATION")
+        await t(-8.0, mid_y - 0.5, "SETBACK", height=1.5, layer="ANNOTATION")
+        # Right side: outside the lot to the right (past the depth dim)
+        await t(d.lot_w + 14, mid_y + 2.0, f"{d.side_sb:.0f}' SIDE", height=1.5, layer="ANNOTATION")
+        await t(d.lot_w + 14, mid_y - 0.5, "SETBACK", height=1.5, layer="ANNOTATION")
+        # Rear setback: above the rear setback line, inside the narrow strip
+        await t(d.lot_w / 2, d.lot_d - d.rear_sb / 2 + 0.5,
+                f"{d.rear_sb:.0f}' REAR", height=1.5, layer="ANNOTATION")
+        # Front setback reference
         await t(d.lot_w / 2, d.front_sb / 2,
                 "20' FRONT SETBACK (PRIMARY)", height=1.25, layer="ANNOTATION")
         await t(d.lot_w / 2, -4.5, "STREET / FRONT", height=2.0, layer="ANNOTATION")
@@ -269,7 +269,7 @@ class SitePlanGenerator:
             ("SITE PLAN — PROPOSED ADU", 4.0),
             (f"JURISDICTION: {jurisdiction.upper()}", 2.5),
             (
-                f"ADU TYPE: Detached {adu_type.upper()}    "
+                f"ADU TYPE: {adu_type.upper()}    "
                 f"TARGET: {proj.get('target_sqft', '—')} SF    "
                 f"MAX ALLOWED: {max_sqft} SF",
                 2.0,
@@ -295,8 +295,8 @@ class SitePlanGenerator:
             await self._b.create_text(tx, y, text, height=height, layer="TITLE-BLOCK")
             y -= height + lh
 
-        # Border around title block
-        await self._b.create_rectangle(tx - 2, ty + 3, d.lot_w + 22, y + 1.5, "TITLE-BLOCK")
+        # Border around title block (starts at x=-2 to align with left side callouts)
+        await self._b.create_rectangle(-10, ty + 3, d.lot_w + 22, y + 1.5, "TITLE-BLOCK")
 
 
 # ── Module-level helpers ───────────────────────────────────────────────
