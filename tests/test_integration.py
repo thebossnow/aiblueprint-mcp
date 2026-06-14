@@ -232,6 +232,40 @@ async def test_server_project_generate_site_plan(server_env):
     assert r["jurisdiction"] == "Encinitas, San Diego, CA"
 
 
+async def test_server_generate_site_plan_requires_jurisdiction(server_env):
+    """generate_site_plan refuses to run before a county is selected."""
+    srv = server_env
+    await srv.project(operation="start")
+    # Answer only the project type — no county/jurisdiction yet.
+    await srv.project(operation="answer", data={"question_id": "project_type", "value": "ADU — Detached"})
+
+    r = json.loads(await srv.project(
+        operation="generate_site_plan",
+        data={"lot_width": 60, "lot_depth": 120},
+    ))
+    assert r["ok"] is False
+    assert "jurisdiction" in r["error"].lower()
+
+
+async def test_server_compliance_checks_require_jurisdiction(server_env):
+    """Geometry compliance checks refuse to run against state-only defaults."""
+    srv = server_env
+    await srv.project(operation="start")
+    await srv.project(operation="answer", data={"question_id": "project_type", "value": "ADU — Detached"})
+    await srv.drawing(operation="create")
+    rect = json.loads(await srv.entity(operation="create_rectangle", x1=0, y1=0, x2=20, y2=25))
+
+    r = json.loads(await srv.compliance(
+        operation="check_area", data={"footprint_handle": rect["handle"]},
+    ))
+    assert r["ok"] is False
+    assert "jurisdiction" in r["error"].lower()
+
+    # requirements is a "show me" op and still works (state defaults, with a warning).
+    req = json.loads(await srv.compliance(operation="requirements"))
+    assert req["ok"] is True
+
+
 async def test_server_invalid_operation(server_env):
     """Unknown operations return ok=False with a clear error message."""
     srv = server_env

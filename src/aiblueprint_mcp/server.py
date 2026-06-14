@@ -418,6 +418,12 @@ async def project(operation: str, data: dict | None = None) -> str:
             d = _check("project", "generate_site_plan", data)
         except ValidationError as ve:
             return _err(f"Invalid input for project.generate_site_plan: {ve}")
+        if not p.all_answers().get("county"):
+            return _err(
+                "No jurisdiction selected. Answer at least the county in the project "
+                "intake before generating a site plan — otherwise the plan would use "
+                "CA state defaults instead of your local rules."
+            )
         from aiblueprint_mcp.plan_generator import SitePlanConfig, SitePlanGenerator
         b = await _get_backend()
         gen = SitePlanGenerator(b, p)
@@ -484,6 +490,13 @@ async def compliance(operation: str, data: dict | None = None) -> str:
     profile = p.resolved_profile()
     if not profile:
         return _err("No project profile. Run project('start') and answer questions first.")
+    if not profile.get("has_jurisdiction"):
+        return _err(
+            "No jurisdiction selected. Answer at least the county in the project intake "
+            "before running geometry compliance checks — results would otherwise be "
+            "measured against CA state defaults, not your local rules. "
+            "Use compliance('requirements') to view the current (state-default) rules."
+        )
 
     engine = ComplianceEngine(b, profile)
 

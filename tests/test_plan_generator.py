@@ -154,3 +154,35 @@ async def test_generate_hoa_setback_respected(workspace, backend):
     assert r.ok, r.error
     assert r.payload["side_setback_ft"] == 7.0
     assert r.payload["rear_setback_ft"] == 6.0
+
+
+async def test_generate_explicit_dims_over_max_rejected(workspace, backend):
+    """Explicit ADU dims exceeding the effective max_sqft are rejected, not drawn."""
+    gen = SitePlanGenerator(backend, _la_session())  # CA state max = 1200 sq ft
+    # 40 × 40 = 1600 sq ft; fits the lot geometrically but violates max_sqft.
+    r = await gen.generate(
+        SitePlanConfig(lot_width=120, lot_depth=160, adu_width=40, adu_depth=40)
+    )
+    assert not r.ok
+    assert "exceeds the maximum" in r.error.lower()
+    assert "1200" in r.error
+
+
+async def test_generate_auto_size_never_exceeds_max(workspace, backend):
+    """Auto-sizing clamps the footprint to the effective max even when target == max."""
+    s = _la_session()
+    s.answer("adu_target_sqft", 1200)  # equal to CA state max
+    gen = SitePlanGenerator(backend, s)
+    r = await gen.generate(SitePlanConfig(lot_width=80, lot_depth=140))
+    assert r.ok, r.error
+    assert r.payload["adu_area_sqft"] <= 1200.0
+
+
+async def test_generate_degenerate_target_does_not_crash(workspace, backend):
+    """A non-positive target sq ft is floored instead of raising sqrt/divide errors."""
+    s = _la_session()
+    s.answer("adu_target_sqft", 0)
+    gen = SitePlanGenerator(backend, s)
+    r = await gen.generate(SitePlanConfig(lot_width=60, lot_depth=120))
+    assert r.ok, r.error
+    assert r.payload["adu_area_sqft"] > 0

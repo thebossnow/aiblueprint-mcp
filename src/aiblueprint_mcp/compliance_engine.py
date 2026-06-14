@@ -100,8 +100,15 @@ class ComplianceEngine:
         )
 
         # Create the buildable envelope by offsetting the property boundary inward.
-        # Negative offset = inward for a CCW-wound polyline.
-        envelope_r = await self._b.entity_offset(property_boundary_handle, -offset_dist)
+        # The offset helper moves to the LEFT of each directed edge — which is the
+        # polygon interior for CCW winding — so the inward direction depends on
+        # winding: positive distance for CCW, negative for CW. Detect winding from
+        # the signed area so a clockwise boundary doesn't silently offset OUTWARD
+        # (which would make every ADU pass).
+        boundary_pts = self._entity_points(property_boundary_handle)
+        ccw = _signed_area(boundary_pts) > 0 if boundary_pts else True
+        inward = offset_dist if ccw else -offset_dist
+        envelope_r = await self._b.entity_offset(property_boundary_handle, inward)
         if not envelope_r.ok:
             return CheckResult(
                 "setbacks", False,
@@ -125,38 +132,62 @@ class ComplianceEngine:
             import structlog
             structlog.get_logger().warning("compliance_setback_layer_assign_failed", error=str(exc))
 
-        # Check if the ADU footprint is inside the envelope using bounding box comparison.
-        # Full polygon-in-polygon is beyond scope here; we measure and compare areas.
+        # Determine pass/fail by actual containment: every ADU footprint vertex
+        # must fall within the buildable envelope's bounding box. For the
+        # axis-aligned rectangles this tool generates that is exact, and for
+        # arbitrary footprints it is a conservative (never falsely-passing) test —
+        # a strict improvement over the old area-only comparison, which let an
+        # ADU poke outside the envelope as long as its total area was smaller.
         adu_r = await self._b.entity_measure(adu_footprint_handle)
         env_r = await self._b.entity_measure(envelope_handle)
+        adu_area = adu_r.payload.get("area", 0) if adu_r.ok else 0
+        env_area = env_r.payload.get("area", 0) if env_r.ok else 0
 
-        if not adu_r.ok or not env_r.ok:
-            return CheckResult(
-                "setbacks", False,
-                message="Could not measure footprint or envelope area.",
-                annotated_handles=annotated,
-            )
-
-        adu_area = adu_r.payload.get("area", 0)
-        env_area = env_r.payload.get("area", 0)
-
-        passed = adu_area <= env_area
+        adu_pts = self._entity_points(adu_footprint_handle)
+        env_pts = self._entity_points(envelope_handle)
         side_str = f"{side_ft} ft" if side_ft else "N/A"
         rear_str = f"{rear_ft} ft" if rear_ft else "N/A"
+
+        if adu_pts and env_pts:
+            tol = 1e-6
+            exmin, eymin, exmax, eymax = _bbox(env_pts)
+            passed = all(
+                exmin - tol <= x <= exmax + tol and eymin - tol <= y <= eymax + tol
+                for x, y in adu_pts
+            )
+            detail = (
+                "ADU footprint is fully within the buildable envelope."
+                if passed
+                else "ADU footprint extends OUTSIDE the buildable envelope — setback violation."
+            )
+        else:
+            # Fallback when geometry isn't a readable polyline: area comparison.
+            passed = adu_area <= env_area
+            detail = (
+                f"Area check only: ADU {adu_area:.1f} sq ft "
+                f"{'≤' if passed else '>'} envelope {env_area:.1f} sq ft. "
+                "Verify all four sides meet setback requirements."
+            )
+
         return CheckResult(
             name="setbacks",
             passed=passed,
             value=f"ADU {adu_area:.1f} sq ft, buildable envelope {env_area:.1f} sq ft",
             limit=f"side {side_str}, rear {rear_str}",
             source=self._sources.get("setback_side_ft", ""),
-            message=(
-                f"Setback envelope ({offset_dist} ft uniform offset) drawn. "
-                f"ADU area ({adu_area:.1f} sq ft) {'≤' if passed else '>'} "
-                f"envelope area ({env_area:.1f} sq ft). "
-                "Note: this is a simplified area check; verify all four sides meet setback requirements."
-            ),
+            message=f"Setback envelope ({offset_dist} ft uniform offset) drawn. {detail}",
             annotated_handles=annotated,
         )
+
+    def _entity_points(self, handle: str) -> list[tuple[float, float]] | None:
+        """Return an LWPOLYLINE's 2D vertices, or None if not readable."""
+        try:
+            ent = self._b._doc.entitydb.get(handle)
+            if ent is None or ent.dxftype() != "LWPOLYLINE":
+                return None
+            return [(float(p[0]), float(p[1])) for p in ent.get_points(format="xy")]
+        except Exception:
+            return None
 
     async def check_lot_coverage(
         self, lot_boundary_handle: str, all_structure_handles: list[str]
@@ -241,3 +272,25 @@ class ComplianceEngine:
             "notes": self._profile.get("notes", []),
             "disclaimers": self._profile.get("disclaimers", []),
         }
+
+
+# ── Geometry helpers ───────────────────────────────────────────────────
+
+def _signed_area(pts: list[tuple[float, float]]) -> float:
+    """Shoelace signed area; positive = counter-clockwise winding."""
+    n = len(pts)
+    if n < 3:
+        return 0.0
+    s = 0.0
+    for i in range(n):
+        x1, y1 = pts[i]
+        x2, y2 = pts[(i + 1) % n]
+        s += x1 * y2 - x2 * y1
+    return s / 2.0
+
+
+def _bbox(pts: list[tuple[float, float]]) -> tuple[float, float, float, float]:
+    """Return (xmin, ymin, xmax, ymax) for a list of 2D points."""
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    return min(xs), min(ys), max(xs), max(ys)

@@ -111,7 +111,19 @@ class ProjectSession:
                 "Reduce the design or verify with the local building department."
             )
 
+        # Surface jurisdiction-completeness so callers don't act on state-only
+        # defaults thinking they're county/city-specific.
+        warnings = list(r.warnings)
+        if not answers.get("county"):
+            warnings.insert(0, (
+                "No county selected — these requirements fall back to CA state "
+                "defaults only. Select a county (and city) in the intake for "
+                "jurisdiction-specific rules."
+            ))
+
         return {
+            "complete": self._q.complete,
+            "has_jurisdiction": bool(answers.get("county")),
             "project": {
                 "type": answers.get("project_type", ""),
                 "adu_type": self._adu_type(),
@@ -142,6 +154,6 @@ class ProjectSession:
             },
             "residential_standards": r.residential,
             "notes": r.notes,
-            "warnings": r.warnings,
+            "warnings": warnings,
             "disclaimers": r.disclaimers,
         }

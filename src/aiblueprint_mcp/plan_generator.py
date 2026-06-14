@@ -96,7 +96,7 @@ class SitePlanGenerator:
         target = float((profile.get("project") or {}).get("target_sqft") or 500.0)
         target = min(target, max_sqft)
 
-        adu_w, adu_d = _compute_adu_size(target, cfg, cfg.lot_width, side_sb)
+        adu_w, adu_d = _compute_adu_size(target, cfg, cfg.lot_width, side_sb, max_sqft)
         adu_x = _compute_adu_x(cfg.adu_position, cfg.lot_width, adu_w, side_sb)
         adu_y = cfg.lot_depth - rear_sb - adu_d
 
@@ -118,6 +118,13 @@ class SitePlanGenerator:
             raise CommandError(
                 f"ADU depth {adu_d:.1f} ft + rear setback {rear_sb:.1f} ft "
                 f"exceeds lot depth {cfg.lot_depth:.1f} ft."
+            )
+        # Reject any footprint over the effective max — explicit dims would
+        # otherwise slip past (auto-sizing already clamps to max_sqft).
+        if dims.adu_area > max_sqft + 0.5:
+            raise CommandError(
+                f"ADU area {dims.adu_area:.0f} sq ft exceeds the maximum allowed "
+                f"{max_sqft:.0f} sq ft for this jurisdiction. Reduce adu_width/adu_depth."
             )
 
         r = await self._b.drawing_create(cfg.draw_name or "site_plan")
@@ -312,10 +319,13 @@ def _compute_adu_size(
     cfg: SitePlanConfig,
     lot_width: float,
     side_sb: float,
+    max_sqft: float,
 ) -> tuple[float, float]:
     if cfg.adu_width is not None and cfg.adu_depth is not None:
         return float(cfg.adu_width), float(cfg.adu_depth)
-    # Auto-size: 4:5 aspect ratio (width:depth), rounded to nearest 0.5 ft
+    # Auto-size: 4:5 aspect ratio (width:depth), rounded to nearest 0.5 ft.
+    # Guard against degenerate targets so we never sqrt/divide a non-positive.
+    target_sqft = max(float(target_sqft), 1.0)
     w = math.sqrt(target_sqft * 0.8)
     d = target_sqft / w
     w = round(w * 2) / 2
@@ -323,7 +333,10 @@ def _compute_adu_size(
     max_w = lot_width - 2 * side_sb
     if w > max_w:
         w = max(1.0, max_w)
-        d = math.ceil(target_sqft / w)
+        d = round(math.ceil(target_sqft / w) * 2) / 2
+    # Never let rounding push the footprint over the effective maximum.
+    if w * d > max_sqft and w > 0:
+        d = math.floor(max_sqft / w * 2) / 2
     return w, d
 
 
