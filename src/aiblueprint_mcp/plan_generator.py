@@ -212,30 +212,32 @@ class SitePlanGenerator:
     async def _add_annotations(self, d: _Dims, profile: dict[str, Any]) -> None:
         t = self._b.create_text
 
-        # Lot label
-        await t(d.lot_w / 2, d.lot_d / 2 + 4, "EXISTING LOT", height=2.5, layer="ANNOTATION")
-        await t(d.lot_w / 2, d.lot_d / 2, f"{d.lot_w:.0f}' × {d.lot_d:.0f}'", height=2.0, layer="ANNOTATION")
+        C = "MIDDLE_CENTER"
 
-        # ADU label
-        await t(d.adu_cx, d.adu_cy + 1.5, "PROPOSED ADU", height=2.0, layer="ANNOTATION")
-        await t(d.adu_cx, d.adu_cy - 1.5, f"{d.adu_area:.0f} SF", height=1.75, layer="ANNOTATION")
+        # Lot label — centered on the lot centroid
+        await t(d.lot_w / 2, d.lot_d / 2 + 4, "EXISTING LOT", height=2.5, layer="ANNOTATION", align=C)
+        await t(d.lot_w / 2, d.lot_d / 2, f"{d.lot_w:.0f}' × {d.lot_d:.0f}'", height=2.0, layer="ANNOTATION", align=C)
+
+        # ADU label — centered on ADU footprint
+        await t(d.adu_cx, d.adu_cy + 1.5, "PROPOSED ADU", height=2.0, layer="ANNOTATION", align=C)
+        await t(d.adu_cx, d.adu_cy - 1.5, f"{d.adu_area:.0f} SF", height=1.75, layer="ANNOTATION", align=C)
 
         # Setback callout labels — placed OUTSIDE the lot so they don't crowd the
-        # 4 ft setback zones. Arrows point toward the setback line via leader-style text.
+        # 4 ft setback zones.
         mid_y = d.adu_y + d.adu_d / 2
-        # Left side: outside the lot to the left
-        await t(-8.0, mid_y + 2.0, f"{d.side_sb:.0f}' SIDE", height=1.5, layer="ANNOTATION")
-        await t(-8.0, mid_y - 0.5, "SETBACK", height=1.5, layer="ANNOTATION")
+        # Left side: outside the lot to the left, centered on their column
+        await t(-8.0, mid_y + 2.0, f"{d.side_sb:.0f}' SIDE", height=1.5, layer="ANNOTATION", align=C)
+        await t(-8.0, mid_y - 0.5, "SETBACK", height=1.5, layer="ANNOTATION", align=C)
         # Right side: outside the lot to the right (past the depth dim)
-        await t(d.lot_w + 14, mid_y + 2.0, f"{d.side_sb:.0f}' SIDE", height=1.5, layer="ANNOTATION")
-        await t(d.lot_w + 14, mid_y - 0.5, "SETBACK", height=1.5, layer="ANNOTATION")
-        # Rear setback: above the rear setback line, inside the narrow strip
+        await t(d.lot_w + 14, mid_y + 2.0, f"{d.side_sb:.0f}' SIDE", height=1.5, layer="ANNOTATION", align=C)
+        await t(d.lot_w + 14, mid_y - 0.5, "SETBACK", height=1.5, layer="ANNOTATION", align=C)
+        # Rear setback: centered above the rear setback line
         await t(d.lot_w / 2, d.lot_d - d.rear_sb / 2 + 0.5,
-                f"{d.rear_sb:.0f}' REAR", height=1.5, layer="ANNOTATION")
-        # Front setback reference
+                f"{d.rear_sb:.0f}' REAR", height=1.5, layer="ANNOTATION", align=C)
+        # Front setback reference — centered on lot width
         await t(d.lot_w / 2, d.front_sb / 2,
-                "20' FRONT SETBACK (PRIMARY)", height=1.25, layer="ANNOTATION")
-        await t(d.lot_w / 2, -4.5, "STREET / FRONT", height=2.0, layer="ANNOTATION")
+                "20' FRONT SETBACK (PRIMARY)", height=1.25, layer="ANNOTATION", align=C)
+        await t(d.lot_w / 2, -4.5, "STREET / FRONT", height=2.0, layer="ANNOTATION", align=C)
 
     async def _add_north_arrow(self, d: _Dims) -> None:
         cx = d.lot_w + 16
@@ -247,7 +249,7 @@ class SitePlanGenerator:
         await ln(cx, cy + shaft / 2, cx - head, cy + shaft / 2 - head * 1.5, "NORTH-ARROW")
         await ln(cx, cy + shaft / 2, cx + head, cy + shaft / 2 - head * 1.5, "NORTH-ARROW")
         await ci(cx, cy, shaft / 2 + 1.5, "NORTH-ARROW")
-        await t(cx - 1.0, cy + shaft / 2 + 2.5, "N", height=3.0, layer="NORTH-ARROW")
+        await t(cx, cy + shaft / 2 + 2.5, "N", height=3.0, layer="NORTH-ARROW", align="MIDDLE_CENTER")
 
     async def _add_title_block(self, d: _Dims, profile: dict[str, Any]) -> None:
         loc = profile.get("location") or {}

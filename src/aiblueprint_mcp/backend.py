@@ -254,11 +254,17 @@ class AIBlueprintBackend:
         return CommandResult(ok=True, payload={"entity_type": "ARC", "handle": e.dxf.handle})
 
     @_op
-    async def create_text(self, x, y, text, height=2.5, rotation=0.0, layer=None) -> CommandResult:
+    async def create_text(self, x, y, text, height=2.5, rotation=0.0, layer=None,
+                          align=None) -> CommandResult:
         self._ensure_layer(layer)
         e = self._msp.add_text(text, dxfattribs={
-            "insert": (x, y), "height": height, "rotation": rotation, "layer": layer or "0",
+            "height": height, "rotation": rotation, "layer": layer or "0",
         })
+        if align:
+            from ezdxf.enums import TextEntityAlignment
+            e.set_placement((x, y), align=TextEntityAlignment[align.upper()])
+        else:
+            e.dxf.insert = (x, y)
         return CommandResult(ok=True, payload={"entity_type": "TEXT", "handle": e.dxf.handle})
 
     @_op
