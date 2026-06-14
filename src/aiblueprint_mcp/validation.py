@@ -10,7 +10,7 @@ schema and friendly errors instead of raw ``KeyError``s.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -256,7 +256,7 @@ class GenerateSitePlan(_Base):
     lot_depth: float = Field(gt=0)
     adu_width: float | None = Field(default=None, gt=0)
     adu_depth: float | None = Field(default=None, gt=0)
-    adu_position: str = "rear_center"
+    adu_position: Literal["rear_center", "rear_left", "rear_right"] = "rear_center"
     draw_name: str | None = None
 
 

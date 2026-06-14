@@ -137,16 +137,24 @@ def _make_questions(answers: dict[str, Any]) -> list[Question]:
         ))
         questions.append(Question(
             id="hoa_additional_setback_side_ft",
-            text="Does the HOA require a greater side-yard setback than the city/county minimum?",
-            help="Enter the HOA-required side setback in feet, or 0 if same as code.",
+            text="What is the HOA's required side-yard setback (total feet from property line)?",
+            help=(
+                "Enter the TOTAL side setback your HOA requires, not the additional amount. "
+                "Example: if code requires 4 ft and your HOA requires 7 ft, enter 7. "
+                "Enter 0 if your HOA has no side setback requirement beyond code."
+            ),
             type="number",
             unit="ft",
             required=False,
         ))
         questions.append(Question(
             id="hoa_additional_setback_rear_ft",
-            text="Does the HOA require a greater rear-yard setback than the city/county minimum?",
-            help="Enter the HOA-required rear setback in feet, or 0 if same as code.",
+            text="What is the HOA's required rear-yard setback (total feet from property line)?",
+            help=(
+                "Enter the TOTAL rear setback your HOA requires, not the additional amount. "
+                "Example: if code requires 4 ft and your HOA requires 6 ft, enter 6. "
+                "Enter 0 if your HOA has no rear setback requirement beyond code."
+            ),
             type="number",
             unit="ft",
             required=False,

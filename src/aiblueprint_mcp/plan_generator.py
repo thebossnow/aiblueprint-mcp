@@ -226,7 +226,8 @@ class SitePlanGenerator:
         await t(d.adu_cx, d.adu_cy - 1.5, f"{d.adu_area:.0f} SF", height=1.75, layer="ANNOTATION")
 
         # Setback annotations
-        await t(d.side_sb / 2, mid_y := d.adu_y + d.adu_d / 2,
+        mid_y = d.adu_y + d.adu_d / 2
+        await t(d.side_sb / 2, mid_y,
                 f"{d.side_sb:.0f}'", height=1.5, rotation=90.0, layer="ANNOTATION")
         await t(d.lot_w - d.side_sb / 2, mid_y,
                 f"{d.side_sb:.0f}'", height=1.5, rotation=90.0, layer="ANNOTATION")
