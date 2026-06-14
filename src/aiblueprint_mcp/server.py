@@ -137,7 +137,7 @@ async def entity(
         "create_polyline": lambda: b.create_polyline(d["points"], d.get("closed", False), d.get("layer")),
         "create_rectangle": lambda: b.create_rectangle(d["x1"], d["y1"], d["x2"], d["y2"], d.get("layer")),
         "create_arc": lambda: b.create_arc(d["cx"], d["cy"], d["radius"], d["start_angle"], d["end_angle"], d.get("layer")),
-        "create_text": lambda: b.create_text(d["x"], d["y"], d["text"], d.get("height", 2.5), d.get("rotation", 0.0), d.get("layer")),
+        "create_text": lambda: b.create_text(d["x"], d["y"], d["text"], d.get("height", 2.5), d.get("rotation", 0.0), d.get("layer"), d.get("align")),
         "create_mtext": lambda: b.create_mtext(d["x"], d["y"], d["width"], d["text"], d.get("height", 2.5), d.get("layer")),
         "create_hatch": lambda: b.create_hatch(d["entity_id"], d.get("pattern", "ANSI31"), d.get("scale", 1.0)),
         "list": lambda: b.entity_list(d.get("layer")),
@@ -272,7 +272,7 @@ async def annotation(operation: str, data: dict | None = None) -> str:
 
     if operation == "create_text":
         r = await b.create_text(d["x"], d["y"], d["text"], d.get("height", 2.5),
-                                d.get("rotation", 0.0), d.get("layer"))
+                                d.get("rotation", 0.0), d.get("layer"), d.get("align"))
     elif operation == "create_dimension_aligned":
         r = await b.create_dimension_aligned(d["x1"], d["y1"], d["x2"], d["y2"], d["offset"], d.get("dim_overrides"))
     elif operation == "create_dimension_linear":

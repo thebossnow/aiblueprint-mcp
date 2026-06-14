@@ -84,6 +84,7 @@ class CreateText(_Base):
     height: float = Field(default=2.5, gt=0)
     rotation: float = 0.0
     layer: str | None = None
+    align: str | None = None  # e.g. "LEFT" (default), "CENTER", "MIDDLE_CENTER"
 
 
 class CreateMText(_Base):
