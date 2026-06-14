@@ -60,7 +60,21 @@ class ComplianceEngine:
             return CheckResult("area", False, message="Entity has no area (not a closed polyline).")
 
         # Convert from drawing units to sq ft — assumes 1 drawing unit = 1 ft
-        passed = max_sqft is None or actual <= max_sqft
+        if max_sqft is None:
+            # No limit in the effective rules — report area but don't claim a PASS
+            # against a limit that was never checked.
+            return CheckResult(
+                name="area",
+                passed=True,
+                value=round(actual, 1),
+                limit=None,
+                source=self._sources.get("max_sqft", ""),
+                message=(
+                    f"ADU footprint area {actual:.1f} sq ft — no max_sqft limit in the "
+                    "effective rules, so no area limit was checked. Verify manually."
+                ),
+            )
+        passed = actual <= max_sqft
         return CheckResult(
             name="area",
             passed=passed,
@@ -199,14 +213,31 @@ class ComplianceEngine:
             return CheckResult("lot_coverage", False, message=f"Cannot measure lot: {lot_r.error}")
         lot_area = lot_r.payload.get("area", 0)
 
+        # De-duplicate handles and never count the lot boundary itself as a
+        # structure — both mistakes would silently distort the coverage figure.
+        seen: set[str] = set()
+        skipped: list[str] = []
         total_covered = 0.0
         for h in all_structure_handles:
+            if h == lot_boundary_handle or h in seen:
+                continue
+            seen.add(h)
             r = await self._b.entity_measure(h)
-            if r.ok and r.payload.get("area"):
-                total_covered += r.payload["area"]
+            area = r.payload.get("area") if r.ok else None
+            if area:
+                total_covered += area
+            else:
+                # A structure we couldn't measure (open polyline, non-area
+                # entity, bad handle) would otherwise silently undercount.
+                skipped.append(h)
 
         pct = (total_covered / lot_area * 100) if lot_area > 0 else 0
         passed = max_pct is None or pct <= max_pct
+        skip_note = (
+            f" {len(skipped)} structure(s) could not be measured and were excluded "
+            f"(coverage may be understated): {', '.join(skipped)}."
+            if skipped else ""
+        )
         return CheckResult(
             name="lot_coverage",
             passed=passed,
@@ -215,7 +246,7 @@ class ComplianceEngine:
             source=self._sources.get("lot_coverage_max_pct", ""),
             message=(
                 f"Total lot coverage {pct:.1f}% of {lot_area:.0f} sq ft lot "
-                f"({'within' if passed else 'EXCEEDS'} {max_pct}% limit)."
+                f"({'within' if passed else 'EXCEEDS'} {max_pct}% limit).{skip_note}"
             ),
         )
 

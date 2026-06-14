@@ -186,3 +186,21 @@ async def test_generate_degenerate_target_does_not_crash(workspace, backend):
     r = await gen.generate(SitePlanConfig(lot_width=60, lot_depth=120))
     assert r.ok, r.error
     assert r.payload["adu_area_sqft"] > 0
+
+
+async def test_generate_auto_size_narrow_lot_clear_error(workspace, backend):
+    """Auto-sizing on a too-narrow lot returns a 'lot too narrow' error, not a depth error."""
+    gen = SitePlanGenerator(backend, _la_session())
+    # 14 ft lot − 8 ft setbacks = 6 ft buildable width.
+    r = await gen.generate(SitePlanConfig(lot_width=14, lot_depth=120))
+    assert not r.ok
+    assert "too narrow" in r.error.lower()
+
+
+async def test_generate_front_setback_overlap_warns(workspace, backend):
+    """A shallow lot that pushes the ADU into the front setback emits a warning (not silence)."""
+    gen = SitePlanGenerator(backend, _la_session())
+    # 40 ft deep: ADU 25 + rear 4 → front edge at y=11, inside the 20 ft front band.
+    r = await gen.generate(SitePlanConfig(lot_width=60, lot_depth=40, adu_width=20, adu_depth=25))
+    assert r.ok, r.error
+    assert any("front-setback" in w for w in r.payload["warnings"])

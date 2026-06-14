@@ -78,6 +78,21 @@ FIRE_ZONES = [
 ]
 
 
+def _as_positive_float(value: Any) -> float | None:
+    """Return value as a float if it's numeric and > 0, else None.
+
+    Non-numeric answers (e.g. "N/A", "") are treated as "not provided" rather
+    than crashing profile resolution.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return None
+    return num if num > 0 else None
+
+
 def _make_questions(answers: dict[str, Any]) -> list[Question]:
     """Return the full ordered question list, adjusted for current answers."""
     questions: list[Question] = []
@@ -315,15 +330,12 @@ class Questionnaire:
         if not self.state.answers.get("hoa_exists"):
             return None
         hoa: dict[str, Any] = {}
-        if h := self.state.answers.get("hoa_max_height_ft"):
-            if float(h) > 0:
-                hoa["max_height_ft"] = float(h)
-        if s := self.state.answers.get("hoa_additional_setback_side_ft"):
-            if float(s) > 0:
-                hoa["setback_side_ft"] = float(s)
-        if r := self.state.answers.get("hoa_additional_setback_rear_ft"):
-            if float(r) > 0:
-                hoa["setback_rear_ft"] = float(r)
+        if (h := _as_positive_float(self.state.answers.get("hoa_max_height_ft"))) is not None:
+            hoa["max_height_ft"] = h
+        if (s := _as_positive_float(self.state.answers.get("hoa_additional_setback_side_ft"))) is not None:
+            hoa["setback_side_ft"] = s
+        if (r := _as_positive_float(self.state.answers.get("hoa_additional_setback_rear_ft"))) is not None:
+            hoa["setback_rear_ft"] = r
         if self.state.answers.get("hoa_arch_review_required"):
             hoa["design_review_required"] = True
         if n := self.state.answers.get("hoa_notes"):

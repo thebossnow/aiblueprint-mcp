@@ -145,6 +145,47 @@ async def test_check_lot_coverage_fails(backend):
     assert "EXCEEDS" in result.message
 
 
+async def test_check_area_no_limit_message_is_clear(backend):
+    """With no max_sqft, the result reports 'no limit checked' rather than 'within None'."""
+    profile = _make_profile(max_sqft=None)
+    engine = ComplianceEngine(backend, profile)
+    r = await backend.create_rectangle(0, 0, 50, 50)
+    result = await engine.check_area(r.payload["handle"])
+    assert result.passed
+    assert "None sq ft limit" not in result.message
+    assert "no max_sqft limit" in result.message
+
+
+async def test_check_lot_coverage_ignores_boundary_handle(backend):
+    """Passing the lot boundary in the structure list must not inflate coverage."""
+    profile = _make_profile(lot_pct=50)
+    engine = ComplianceEngine(backend, profile)
+    lot = await backend.create_rectangle(0, 0, 100, 100)        # 10,000 sq ft
+    structure = await backend.create_rectangle(0, 0, 60, 60)    # 3,600 sq ft = 36%
+    # Include the lot handle itself plus a duplicate structure handle.
+    result = await engine.check_lot_coverage(
+        lot.payload["handle"],
+        [lot.payload["handle"], structure.payload["handle"], structure.payload["handle"]],
+    )
+    assert result.passed
+    assert "36.0%" in result.value
+
+
+async def test_check_lot_coverage_flags_unmeasurable(backend):
+    """A non-area structure (a LINE) is excluded and surfaced in the message."""
+    profile = _make_profile(lot_pct=50)
+    engine = ComplianceEngine(backend, profile)
+    lot = await backend.create_rectangle(0, 0, 100, 100)
+    structure = await backend.create_rectangle(0, 0, 60, 60)
+    line = await backend.create_line(0, 0, 10, 0)  # no area
+    result = await engine.check_lot_coverage(
+        lot.payload["handle"],
+        [structure.payload["handle"], line.payload["handle"]],
+    )
+    assert "36.0%" in result.value
+    assert "could not be measured" in result.message
+
+
 async def test_full_report_runs_all_checks(backend):
     profile = _make_profile(max_sqft=600, side_ft=4, rear_ft=4, lot_pct=50)
     engine = ComplianceEngine(backend, profile)

@@ -135,6 +135,33 @@ def test_project_session_profile_has_warnings():
     assert len(profile.get("warnings", [])) > 0
 
 
+def test_hoa_non_numeric_answer_does_not_crash():
+    """A non-numeric HOA numeric answer is ignored, not propagated into a crash."""
+    p = ProjectSession()
+    p.reset()
+    p.answer("project_type", "ADU — Detached")
+    p.answer("county", "San Diego")
+    p.answer("city", "Encinitas")
+    p.answer("hoa_exists", "Yes")
+    p.answer("hoa_max_height_ft", "N/A")          # garbage instead of a number
+    p.answer("hoa_additional_setback_side_ft", "")  # blank
+    p.answer("hoa_additional_setback_rear_ft", "0")
+    p.answer("hoa_arch_review_required", "Yes")
+    p.answer("hoa_notes", "")
+    p.answer("lot_size_sqft", "7500")
+    p.answer("existing_primary_sqft", "1400")
+    p.answer("existing_year_built", "1985")
+    p.answer("fire_zone", "LRA — Local Responsibility Area (urban/suburban)")
+    p.answer("coastal_zone", "No")
+    p.answer("adu_target_sqft", "500")
+    p.answer("adu_bedrooms", "1 Bedroom")
+
+    profile = p.resolved_profile()  # must not raise
+    eff = profile["requirements"]["effective"]
+    # The garbage HOA height is ignored, so the state 16 ft height stands.
+    assert eff.get("max_height_ft") == 16
+
+
 def test_project_session_coastal_warning_santa_monica():
     p = ProjectSession()
     _answer_minimal_adu(p, county="Los Angeles", city="Santa Monica")

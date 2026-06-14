@@ -108,6 +108,17 @@ class SitePlanGenerator:
         )
 
         buildable_w = cfg.lot_width - 2 * side_sb
+        auto_sized = cfg.adu_width is None or cfg.adu_depth is None
+        # When auto-sizing on a too-narrow lot, the width clamps to the buildable
+        # width and the depth balloons to hit the target area. Catch that here with
+        # a clear "lot too narrow" message instead of a confusing depth error later.
+        if auto_sized and buildable_w < 8.0:
+            raise CommandError(
+                f"Lot too narrow: buildable width {buildable_w:.1f} ft "
+                f"(lot {cfg.lot_width} ft minus {side_sb} ft setbacks each side) "
+                f"cannot fit a reasonable ADU. Widen the lot, reduce setbacks, or "
+                f"pass explicit adu_width/adu_depth."
+            )
         if adu_w > buildable_w:
             raise CommandError(
                 f"ADU width {adu_w:.1f} ft exceeds buildable width "
@@ -146,6 +157,16 @@ class SitePlanGenerator:
         county = loc.get("county") or ""
         jurisdiction = ", ".join(p for p in [city, county, "CA"] if p)
 
+        # Surface (don't silently allow) an ADU whose front edge falls inside the
+        # front-setback reference band — only possible on shallow lots.
+        plan_warnings = list(profile.get("warnings") or [])
+        if adu_y < front_sb:
+            plan_warnings.append(
+                f"ADU front edge is {adu_y:.1f} ft from the street, inside the "
+                f"{front_sb:.0f} ft front-setback reference. Verify front-setback "
+                f"requirements for ADUs in this jurisdiction."
+            )
+
         return CommandResult(ok=True, payload={
             "handle": handle,
             "drawing_name": cfg.draw_name or "site_plan",
@@ -162,7 +183,7 @@ class SitePlanGenerator:
             "adu_position": cfg.adu_position,
             "jurisdiction": jurisdiction,
             "effective_max_sqft": max_sqft,
-            "warnings": list(profile.get("warnings") or []),
+            "warnings": plan_warnings,
         })
 
     async def _setup_layers(self) -> None:

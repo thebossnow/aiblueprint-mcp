@@ -59,6 +59,19 @@ async def test_entity_get_arc_and_text(backend):
     assert tinfo.payload["text"] == "hello"
 
 
+async def test_create_text_valid_align(backend):
+    r = await backend.create_text(5, 5, "centered", align="MIDDLE_CENTER")
+    assert r.ok, r.error
+    assert r.payload["entity_type"] == "TEXT"
+
+
+async def test_create_text_invalid_align_clear_error(backend):
+    r = await backend.create_text(5, 5, "oops", align="CENTER_MIDDLE")  # transposed
+    assert not r.ok
+    assert "align" in r.error.lower()
+    assert "MIDDLE_CENTER" in r.error  # lists valid values
+
+
 async def test_offset_closed_polyline_changes_area(backend):
     # Rectangle vertices are CCW, so a positive (left-of-edge) offset moves
     # inward: a 10x10 square offset by 1 becomes 8x8 = 64; by -1 becomes 12x12.

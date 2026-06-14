@@ -158,13 +158,17 @@ def merge_layers(
     if hoa_data:
         adu_layers.append(("HOA / CC&Rs", hoa_data))
 
-    # Merge each numeric rule
+    # Merge each numeric rule. Coerce values to float so a layer that stored a
+    # number as a JSON string ("16") doesn't crash min/max or rank
+    # lexicographically (which would silently pick the wrong "most restrictive").
     for param, strategy in _NUMERIC_MERGE.items():
-        values: list[tuple[str, Any]] = [
-            (name, section[param])
-            for name, section in adu_layers
-            if param in section and section[param] is not None
-        ]
+        values: list[tuple[str, float]] = []
+        for name, section in adu_layers:
+            if param not in section or section[param] is None:
+                continue
+            num = _coerce_float(section[param])
+            if num is not None:
+                values.append((name, num))
         if not values:
             continue
         if strategy == "min":
@@ -187,7 +191,12 @@ def merge_layers(
             effective = all(v for _, v in values)
             imposing = [n for n, v in values if not v]
         req.rules[param] = effective
-        req.sources[param] = ", ".join(imposing) if imposing else "all layers"
+        # Attribute to the layer(s) responsible, resolving a statute citation
+        # when the imposing layer provides one (numeric rules already do this).
+        if imposing:
+            req.sources[param] = _source_citation(adu_layers, param, imposing[0])
+        else:
+            req.sources[param] = "all layers"
 
     # Collect notes from all adu type sections
     for _, section in adu_layers:
@@ -211,6 +220,16 @@ def _source_citation(
         if name == imposing_name and param in (section.get("citations") or {}):
             return section["citations"][param]
     return imposing_name
+
+
+def _coerce_float(value: Any) -> float | None:
+    """Best-effort numeric coercion; returns None if the value isn't numeric."""
+    if isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _coerce_bool(value: Any) -> bool:

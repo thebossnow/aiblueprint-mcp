@@ -262,7 +262,14 @@ class AIBlueprintBackend:
         })
         if align:
             from ezdxf.enums import TextEntityAlignment
-            e.set_placement((x, y), align=TextEntityAlignment[align.upper()])
+            try:
+                placement = TextEntityAlignment[align.upper()]
+            except KeyError as err:
+                valid = ", ".join(a.name for a in TextEntityAlignment)
+                raise CommandError(
+                    f"Unknown text align '{align}'. Valid values: {valid}."
+                ) from err
+            e.set_placement((x, y), align=placement)
         else:
             e.dxf.insert = (x, y)
         return CommandResult(ok=True, payload={"entity_type": "TEXT", "handle": e.dxf.handle})
