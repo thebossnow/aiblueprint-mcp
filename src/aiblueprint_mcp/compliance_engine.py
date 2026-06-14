@@ -110,14 +110,20 @@ class ComplianceEngine:
         envelope_handle = envelope_r.payload["handle"]
         annotated.append(envelope_handle)
 
-        # Style the setback line distinctively (dashed red layer)
-        await self._b.layer_create("SETBACK-LINE", color="red", linetype="DASHED")
+        # Style the setback envelope as a dashed red layer.
+        # Ensure the SITE_DASH linetype exists (plan_generator may or may not have run).
+        doc = self._b._doc
+        if "SITE_DASH" not in doc.linetypes:
+            ltype = doc.linetypes.new("SITE_DASH")
+            ltype.setup_pattern("A,4,-2", length=6.0)
+        await self._b.layer_create("SETBACK-LINE", color="red", linetype="SITE_DASH")
         try:
-            ent = self._b._doc.entitydb.get(envelope_handle)
+            ent = doc.entitydb.get(envelope_handle)
             if ent:
                 ent.dxf.layer = "SETBACK-LINE"
-        except Exception:
-            pass
+        except Exception as exc:
+            import structlog
+            structlog.get_logger().warning("compliance_setback_layer_assign_failed", error=str(exc))
 
         # Check if the ADU footprint is inside the envelope using bounding box comparison.
         # Full polygon-in-polygon is beyond scope here; we measure and compare areas.
