@@ -347,8 +347,12 @@ async def project(operation: str, data: dict | None = None) -> str:
                  Available at any point; complete after all questions are answered.
       status   — Show questionnaire progress (answered / total / percent).
       reset    — Clear the session and start over.
-      counties — List all CA counties in the database.
-      cities   — List all CA cities in the database.
+      counties          — List all CA counties in the database.
+      cities            — List all CA cities in the database.
+      generate_site_plan — Generate a code-compliant DXF site plan from the
+                           resolved profile. data: {lot_width, lot_depth,
+                           adu_width?, adu_depth?, adu_position?, draw_name?}
+                           Returns drawing handle + layout summary.
     """
     data = data or {}
     p = _get_project()
@@ -408,6 +412,17 @@ async def project(operation: str, data: dict | None = None) -> str:
         from aiblueprint_mcp.jurisdiction import JurisdictionLoader
         loader = JurisdictionLoader("ca")
         return _ok({"cities": [c.title() for c in loader.known_cities()]})
+
+    elif operation == "generate_site_plan":
+        try:
+            d = _check("project", "generate_site_plan", data)
+        except ValidationError as ve:
+            return _err(f"Invalid input for project.generate_site_plan: {ve}")
+        from aiblueprint_mcp.plan_generator import SitePlanConfig, SitePlanGenerator
+        b = await _get_backend()
+        gen = SitePlanGenerator(b, p)
+        r = await gen.generate(SitePlanConfig(**d))
+        return _result(r)
 
     else:
         return _err(f"Unknown project operation: {operation}")
