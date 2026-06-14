@@ -250,6 +250,16 @@ class Leader(_Base):
     text: str
 
 
+# ── project ────────────────────────────────────────────────────────────
+class GenerateSitePlan(_Base):
+    lot_width: float = Field(gt=0)
+    lot_depth: float = Field(gt=0)
+    adu_width: float | None = Field(default=None, gt=0)
+    adu_depth: float | None = Field(default=None, gt=0)
+    adu_position: str = "rear_center"
+    draw_name: str | None = None
+
+
 # ── registry ───────────────────────────────────────────────────────────
 _MODELS: dict[str, type[_Base]] = {
     # drawing
@@ -292,6 +302,8 @@ _MODELS: dict[str, type[_Base]] = {
     "block.insert_with_attributes": BlockInsertAttribs,
     "block.get_attributes": BlockGetAttribs,
     "block.update_attribute": BlockUpdateAttrib,
+    # project
+    "project.generate_site_plan": GenerateSitePlan,
     # annotation
     "annotation.create_text": CreateText,
     "annotation.create_dimension_aligned": DimAligned,
