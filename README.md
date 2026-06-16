@@ -86,6 +86,7 @@ for `open`/`save` are confined to `AIBLUEPRINT_WORKSPACE` — traversal outside 
 | `create_text` | `data: {x, y, text, height?, rotation?}, layer?` |
 | `create_mtext` | `data: {x, y, width, text, height?}, layer?` |
 | `create_hatch` | `entity_id, data: {pattern?, scale?}` |
+| `import_boundary` | ⭐ Irregular parcel boundary. `data: {points: [[x,y],...]}` **or** `{geojson: {...}}`, `layer?` → returns handle + area/perimeter/bbox |
 
 **Read:** `list` (by layer), `get` (full detail for LINE/CIRCLE/ARC/LWPOLYLINE/TEXT/MTEXT/INSERT/HATCH), `measure` (area / perimeter / length quantity takeoff by entity_id)
 
@@ -215,7 +216,7 @@ with a clear message — `{"ok": false, "error": "Invalid input for entity.creat
 
 ```bash
 uv sync --extra dev      # install dev dependencies (pytest, ruff)
-uv run pytest -q         # run the test suite (118 tests)
+uv run pytest -q         # run the test suite (134 tests)
 uv run ruff check src tests
 ```
 
@@ -231,7 +232,6 @@ Tracked in the [issue tracker](https://github.com/thebossnow/aiblueprint-mcp/iss
 - Coverage reporting in CI ([#10](https://github.com/thebossnow/aiblueprint-mcp/issues/10))
 - PyPI publication, versioned releases, changelog ([#11](https://github.com/thebossnow/aiblueprint-mcp/issues/11))
 - Jurisdiction data beyond California ([#12](https://github.com/thebossnow/aiblueprint-mcp/issues/12))
-- Irregular parcels (GeoJSON / survey-point boundaries) ([#14](https://github.com/thebossnow/aiblueprint-mcp/issues/14))
 - Live LibreCAD backend via bivex's TCP bridge ([#1](https://github.com/thebossnow/aiblueprint-mcp/issues/1))
 
 ## License

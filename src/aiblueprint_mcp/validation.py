@@ -261,6 +261,12 @@ class GenerateSitePlan(_Base):
     draw_name: str | None = None
 
 
+class ImportBoundary(_Base):
+    points: list[Any] | None = None
+    geojson: dict[str, Any] | None = None
+    layer: str | None = "LOT-LINE"
+
+
 # ── view ───────────────────────────────────────────────────────────────
 class ViewExport(_Base):
     format: Literal["pdf", "png", "svg", "geojson"] = "pdf"
@@ -279,6 +285,7 @@ _MODELS: dict[str, type[_Base]] = {
     "entity.create_circle": CreateCircle,
     "entity.create_polyline": CreatePolyline,
     "entity.create_rectangle": CreateRectangle,
+    "entity.import_boundary": ImportBoundary,
     "entity.create_arc": CreateArc,
     "entity.create_text": CreateText,
     "entity.create_mtext": CreateMText,

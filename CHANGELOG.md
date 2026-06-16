@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Irregular parcel import** (`entity` tool, `import_boundary` operation) —
+  build a closed boundary polyline from survey points (`points`) or GeoJSON
+  (`geojson`: Polygon/Feature/FeatureCollection). Returns area/perimeter/bbox;
+  the resulting handle works with the compliance engine. New `parcel` module.
 - **Undo/redo** — per-document snapshot stack exposed as `drawing` operations
   `undo`/`redo`. `AIBlueprintBackend.batch()` groups a multi-op sequence (e.g.
   site-plan generation) into a single checkpoint.
