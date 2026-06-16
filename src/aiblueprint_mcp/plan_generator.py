@@ -125,14 +125,16 @@ class SitePlanGenerator:
             raise CommandError(f"Could not create drawing: {r.error}")
         handle = r.payload["handle"]
 
-        await self._setup_layers()
-        lot_handle = await self._draw_lot(dims)
-        await self._draw_setback_lines(dims)
-        adu_handle = await self._draw_adu(dims)
-        await self._add_dimensions(dims)
-        await self._add_annotations(dims, profile)
-        await self._add_north_arrow(dims)
-        await self._add_title_block(dims, profile)
+        # Group the whole plan into one undo checkpoint instead of one per entity.
+        with self._b.batch():
+            await self._setup_layers()
+            lot_handle = await self._draw_lot(dims)
+            await self._draw_setback_lines(dims)
+            adu_handle = await self._draw_adu(dims)
+            await self._add_dimensions(dims)
+            await self._add_annotations(dims, profile)
+            await self._add_north_arrow(dims)
+            await self._add_title_block(dims, profile)
 
         loc = profile.get("location") or {}
         city = loc.get("city") or ""

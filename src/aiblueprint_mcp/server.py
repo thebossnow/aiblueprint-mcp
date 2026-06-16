@@ -70,6 +70,8 @@ async def drawing(operation: str, data: dict | None = None) -> str:
       save   — Save to path (within workspace). data: {path?}
       list   — List all open drawings in the session.
       switch — Make another open drawing current. data: {handle}
+      undo   — Revert the current drawing to the previous checkpoint.
+      redo   — Re-apply the most recently undone checkpoint.
     """
     data = data or {}
     b = await _get_backend()
@@ -90,6 +92,10 @@ async def drawing(operation: str, data: dict | None = None) -> str:
         r = await b.drawing_list()
     elif operation == "switch":
         r = await b.drawing_switch(data["handle"])
+    elif operation == "undo":
+        r = await b.undo()
+    elif operation == "redo":
+        r = await b.redo()
     else:
         return _err(f"Unknown drawing operation: {operation}")
     return _result(r)
