@@ -19,3 +19,9 @@ dist/
 *.dxf
 *.png
 output/
+
+# Coverage
+.coverage
+coverage.md
+coverage.xml
+htmlcov/

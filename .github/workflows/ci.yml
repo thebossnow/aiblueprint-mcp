@@ -30,4 +30,12 @@ jobs:
         run: uv run ruff check src tests
 
       - name: Run tests
-        run: uv run pytest -q
+        run: uv run pytest -q --cov --cov-report=term-missing --cov-report=markdown:coverage.md
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          if [ -f coverage.md ]; then
+            echo "## Coverage (Python ${{ matrix.python-version }})" >> "$GITHUB_STEP_SUMMARY"
+            cat coverage.md >> "$GITHUB_STEP_SUMMARY"
+          fi
