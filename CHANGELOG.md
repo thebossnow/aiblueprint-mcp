@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-06-16
+
+First release published to PyPI. Adds the following on top of the 0.1.0 surface
+(all additive — no breaking changes to the tool/operation contract).
+
 ### Added
 - **Irregular parcel import** (`entity` tool, `import_boundary` operation) —
   build a closed boundary polyline from survey points (`points`) or GeoJSON
@@ -53,5 +58,6 @@ Initial release.
 - **View export** to PNG/PDF/SVG.
 - **CI** — GitHub Actions running ruff + pytest on Python 3.10/3.11/3.12.
 
-[Unreleased]: https://github.com/thebossnow/aiblueprint-mcp/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/thebossnow/aiblueprint-mcp/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/thebossnow/aiblueprint-mcp/releases/tag/v0.1.1
 [0.1.0]: https://github.com/thebossnow/aiblueprint-mcp/releases/tag/v0.1.0
