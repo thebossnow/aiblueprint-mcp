@@ -211,7 +211,7 @@ with a clear message — `{"ok": false, "error": "Invalid input for entity.creat
 
 ```bash
 uv sync --extra dev      # install dev dependencies (pytest, ruff)
-uv run pytest -q         # run the test suite
+uv run pytest -q         # run the test suite (89 tests)
 uv run ruff check src tests
 ```
 
