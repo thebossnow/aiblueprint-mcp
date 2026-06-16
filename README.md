@@ -219,6 +219,8 @@ uv run ruff check src tests
 
 CI runs lint + tests on Python 3.10–3.12 via GitHub Actions (`.github/workflows/ci.yml`).
 
+See [CHANGELOG.md](CHANGELOG.md) for release history and [RELEASING.md](RELEASING.md) for how releases are cut.
+
 ## Roadmap / Known Limitations
 
 Tracked in the [issue tracker](https://github.com/thebossnow/aiblueprint-mcp/issues) — contributions welcome:
