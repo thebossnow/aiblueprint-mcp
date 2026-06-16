@@ -64,7 +64,7 @@ Each gap below is tracked as a GitHub issue — the [issue tracker](https://gith
 - No coverage reporting in CI — [#10](https://github.com/thebossnow/aiblueprint-mcp/issues/10)
 - No PyPI publication / versioned releases / changelog — [#11](https://github.com/thebossnow/aiblueprint-mcp/issues/11)
 - California-only jurisdiction data (format is extensible, just needs data entry) — [#12](https://github.com/thebossnow/aiblueprint-mcp/issues/12)
-- Auto site-plan generator (`generate_site_plan`) still assumes a rectangular lot. Irregular parcels can be imported (`entity.import_boundary`) and run through compliance, but auto ADU placement/directional setbacks on non-rectangular lots is not yet implemented (no issue filed yet)
+- Auto site-plan generator (`generate_site_plan`) still assumes a rectangular lot. Irregular parcels can be imported (`entity.import_boundary`) and run through compliance, but auto ADU placement/directional setbacks on non-rectangular lots is not yet implemented — [#22](https://github.com/thebossnow/aiblueprint-mcp/issues/22)
 - Live LibreCAD backend (bivex TCP bridge) not yet implemented — [#1](https://github.com/thebossnow/aiblueprint-mcp/issues/1)
 
 ---
