@@ -137,7 +137,7 @@ Example:
 |-----------|-------------|
 | `preview` | Save DXF + render PNG via LibreCAD `dxf2png` — returns file paths |
 | `screenshot` | Render the drawing via matplotlib and return it as a native MCP image (no LibreCAD needed) |
-| `export` | Write a PNG/PDF/SVG to the workspace. `data: {format?: "pdf"|"png"|"svg", path?}` |
+| `export` | Write a PNG/PDF/SVG raster/vector render or a GeoJSON `FeatureCollection` to the workspace. `data: {format?: "pdf"|"png"|"svg"|"geojson", path?}` |
 
 ## Hatch Patterns
 
@@ -213,7 +213,7 @@ with a clear message — `{"ok": false, "error": "Invalid input for entity.creat
 
 ```bash
 uv sync --extra dev      # install dev dependencies (pytest, ruff)
-uv run pytest -q         # run the test suite (101 tests)
+uv run pytest -q         # run the test suite (107 tests)
 uv run ruff check src tests
 ```
 
@@ -231,7 +231,6 @@ Tracked in the [issue tracker](https://github.com/thebossnow/aiblueprint-mcp/iss
 - Jurisdiction data beyond California ([#12](https://github.com/thebossnow/aiblueprint-mcp/issues/12))
 - Undo/redo command stack ([#13](https://github.com/thebossnow/aiblueprint-mcp/issues/13))
 - Irregular parcels (GeoJSON / survey-point boundaries) ([#14](https://github.com/thebossnow/aiblueprint-mcp/issues/14))
-- Full PDF / SVG / GeoJSON export ([#15](https://github.com/thebossnow/aiblueprint-mcp/issues/15))
 - Live LibreCAD backend via bivex's TCP bridge ([#1](https://github.com/thebossnow/aiblueprint-mcp/issues/1))
 
 ## License

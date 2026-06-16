@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **GeoJSON export** (`view` tool, `export` operation, `format: "geojson"`) —
+  serializes modelspace entities to a `FeatureCollection` in drawing coordinates.
+- `view.export` input validation model (format ∈ pdf/png/svg/geojson).
 - Test coverage reporting in CI (`pytest-cov`); Markdown coverage table written
   to the GitHub Actions job summary per Python version.
 - Stdio end-to-end integration test suite (`tests/test_integration.py`) covering

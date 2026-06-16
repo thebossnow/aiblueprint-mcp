@@ -299,7 +299,7 @@ async def view(operation: str, data: dict | None = None):
     Operations:
       screenshot   — Render current drawing as a PNG image (matplotlib).
       preview      — Save DXF + render PNG via LibreCAD. Returns file paths.
-      export       — Write PNG/PDF/SVG to the workspace. data: {format?, path?}
+      export       — Write PNG/PDF/SVG/GeoJSON to the workspace. data: {format?, path?}
     """
     data = data or {}
     b = await _get_backend()
@@ -313,7 +313,11 @@ async def view(operation: str, data: dict | None = None):
     elif operation == "preview":
         r = await b.preview()
     elif operation == "export":
-        r = await b.export(data.get("format", "pdf"), data.get("path"))
+        try:
+            d = _check("view", operation, data)
+        except ValidationError as ve:
+            return _err(f"Invalid input for view.{operation}: {ve}")
+        r = await b.export(d.get("format", "pdf"), d.get("path"))
     else:
         return _err(f"Unknown view operation: {operation}")
     return _result(r)

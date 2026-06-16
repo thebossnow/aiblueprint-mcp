@@ -46,3 +46,16 @@ def test_namespaced_create_disambiguation():
     # layer.create vs drawing.create must not collide
     assert validate("drawing.create", {"name": "a"})["name"] == "a"
     assert validate("layer.create", {"name": "walls"})["color"] == "white"
+
+
+def test_view_export_defaults_to_pdf():
+    assert validate("view.export", {})["format"] == "pdf"
+
+
+def test_view_export_accepts_geojson():
+    assert validate("view.export", {"format": "geojson"})["format"] == "geojson"
+
+
+def test_view_export_rejects_unknown_format():
+    with pytest.raises(ValidationError):
+        validate("view.export", {"format": "dwg"})

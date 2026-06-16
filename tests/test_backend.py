@@ -123,6 +123,42 @@ async def test_export_pdf(backend, workspace):
     assert (workspace / "untitled.pdf").exists() or workspace in (workspace,)
 
 
+async def test_export_svg(backend, workspace):
+    await backend.create_rectangle(0, 0, 10, 10)
+    r = await backend.export("svg")
+    assert r.ok and r.payload["format"] == "svg"
+    assert (workspace / "untitled.svg").exists()
+
+
+async def test_export_geojson(backend, workspace):
+    import json
+
+    await backend.create_line(0, 0, 10, 0, "outline")
+    await backend.create_rectangle(0, 0, 10, 4, "walls")  # closed LWPOLYLINE
+    await backend.create_circle(5, 5, 2, "pool")
+    r = await backend.export("geojson")
+    assert r.ok and r.payload["format"] == "geojson"
+    out = workspace / "untitled.geojson"
+    assert out.exists()
+
+    fc = json.loads(out.read_text())
+    assert fc["type"] == "FeatureCollection"
+    geom_types = {f["geometry"]["type"] for f in fc["features"]}
+    assert {"LineString", "Polygon", "Point"} <= geom_types
+
+    # Closed rectangle → Polygon with a closed ring; every feature is traceable.
+    poly = next(f for f in fc["features"] if f["geometry"]["type"] == "Polygon")
+    ring = poly["geometry"]["coordinates"][0]
+    assert ring[0] == ring[-1]
+    for f in fc["features"]:
+        assert {"layer", "dxftype", "handle"} <= f["properties"].keys()
+
+
+async def test_export_rejects_unknown_format(backend):
+    r = await backend.export("dwg")
+    assert not r.ok and "geojson" in r.error
+
+
 async def test_unexpected_error_wrapped(backend):
     # Operating on a missing entity yields a clean error, not a traceback.
     r = await backend.entity_move("does-not-exist", 1, 1)
