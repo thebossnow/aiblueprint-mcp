@@ -10,9 +10,10 @@ venv/
 dist/
 *.egg-info/
 
-# IDE
+# IDE / agent-local
 .vscode/
 .idea/
+.claude/
 
 # Output
 *.dxf

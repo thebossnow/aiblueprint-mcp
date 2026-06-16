@@ -17,7 +17,7 @@ AIBlueprint MCP is an MCP (Model Context Protocol) server that lets AI coding ag
 
 ## Current State
 
-> Counts below verified June 15, 2026 via `uv run pytest --co` (89 collected),
+> Counts below verified June 16, 2026 via `uv run pytest --co` (101 collected),
 > `ls src/aiblueprint_mcp/data/jurisdictions/ca/{counties,cities}`, and the
 > `@mcp.tool()` decorators in `server.py`. GitHub stats are point-in-time and
 > rot fast — re-check before quoting.
@@ -28,7 +28,7 @@ AIBlueprint MCP is an MCP (Model Context Protocol) server that lets AI coding ag
 | Stars | 3 (as of June 2026) |
 | Forks | 2 (as of June 2026) |
 | Production code | ~4,200 lines (11 modules) |
-| Tests | 89 — all passing (3.28s) |
+| Tests | 101 — all passing (~1.8s), incl. stdio e2e integration suite |
 | Lint | Ruff — zero issues |
 | CI | GitHub Actions: ruff + pytest on Python 3.10/3.11/3.12, ~20s runs, all green |
 | MCP tools | 8 (drawing, entity, layer, block, annotation, view, project, compliance) |
@@ -59,7 +59,6 @@ AIBlueprint MCP is an MCP (Model Context Protocol) server that lets AI coding ag
 - No Docker/container support (friction for new users who need LibreCAD)
 - California-only jurisdiction data (format is extensible, just needs data entry)
 - No undo/redo command stack
-- No stdio e2e integration test (tests call Python API directly)
 - No coverage reporting in CI
 - No PyPI publication
 - No versioned releases / changelog
@@ -94,7 +93,8 @@ aiblueprint-mcp/
 │   ├── test_plan_generator.py   # Auto-size, positions, HOA respect (11 tests)
 │   ├── test_questionnaire.py    # State machine, branching, profile (16 tests)
 │   ├── test_server.py           # JSON contract, validation, Image objects (6 tests)
-│   └── test_validation.py       # Pydantic models: required, negative, extra (8 tests)
+│   ├── test_validation.py       # Pydantic models: required, negative, extra (8 tests)
+│   └── test_integration.py      # Stdio e2e: full workflow + MCP dispatch (12 tests)
 ├── .github/workflows/ci.yml     # ruff + pytest on Python 3.10/3.11/3.12
 ├── pyproject.toml               # Hatchling build, uv deps, ruff config
 ├── README.md                    # Full API reference + examples
@@ -133,7 +133,7 @@ uv sync --extra dev
 
 ```bash
 uv run pytest -v
-# 89 tests, all passing
+# 101 tests, all passing
 ```
 
 ### Run Lint
