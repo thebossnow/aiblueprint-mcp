@@ -224,6 +224,36 @@ async def test_batch_groups_into_one_checkpoint(backend):
     assert await _count(backend) == 0
 
 
+async def test_import_boundary_survey_points(backend):
+    r = await backend.import_boundary(points=[[0, 0], [10, 0], [10, 5], [5, 5], [5, 10], [0, 10]])
+    assert r.ok, r.error
+    assert r.payload["entity_type"] == "LWPOLYLINE"
+    assert r.payload["point_count"] == 6
+    assert r.payload["area"] == pytest.approx(75.0)
+    # The drawn polyline measures the same area through the normal takeoff path.
+    m = await backend.entity_measure(r.payload["handle"])
+    assert m.payload["area"] == pytest.approx(75.0)
+
+
+async def test_import_boundary_geojson(backend):
+    poly = {"type": "Polygon", "coordinates": [[[0, 0], [8, 0], [8, 6], [0, 6], [0, 0]]]}
+    r = await backend.import_boundary(geojson=poly)
+    assert r.ok and r.payload["area"] == pytest.approx(48.0)
+    assert r.payload["bbox"] == {"min_x": 0, "min_y": 0, "max_x": 8, "max_y": 6}
+
+
+async def test_import_boundary_requires_one_source(backend):
+    r = await backend.import_boundary()
+    assert not r.ok and "exactly one" in r.error
+
+
+async def test_import_boundary_is_undoable(backend):
+    await backend.import_boundary(points=[[0, 0], [4, 0], [4, 4], [0, 4]])
+    assert (await backend.entity_list()).payload["count"] == 1
+    await backend.undo()
+    assert (await backend.entity_list()).payload["count"] == 0
+
+
 async def test_undo_independent_per_document(backend):
     a = (await backend.drawing_create("a")).payload["handle"]
     await backend.create_line(0, 0, 1, 1)

@@ -111,6 +111,20 @@ async def test_check_lot_coverage_fails(backend):
     assert "EXCEEDS" in result.message
 
 
+async def test_coverage_against_imported_irregular_boundary(backend):
+    """An imported irregular parcel flows through coverage like any boundary."""
+    profile = _make_profile(lot_pct=50)
+    engine = ComplianceEngine(backend, profile)
+    # L-shaped lot, area = 75 sq ft.
+    lot = await backend.import_boundary(
+        points=[[0, 0], [10, 0], [10, 5], [5, 5], [5, 10], [0, 10]]
+    )
+    structure = await backend.create_rectangle(0, 0, 5, 6)  # 30 sq ft = 40% of 75
+    result = await engine.check_lot_coverage(lot.payload["handle"], [structure.payload["handle"]])
+    assert result.passed
+    assert "40.0%" in result.value
+
+
 async def test_full_report_runs_all_checks(backend):
     profile = _make_profile(max_sqft=600, side_ft=4, rear_ft=4, lot_pct=50)
     engine = ComplianceEngine(backend, profile)

@@ -118,7 +118,8 @@ async def entity(
     """Entity creation, querying, and modification.
 
     Create: create_line, create_circle, create_polyline, create_rectangle,
-            create_arc, create_text, create_mtext, create_hatch
+            create_arc, create_text, create_mtext, create_hatch,
+            import_boundary (irregular parcel from survey points or GeoJSON)
     Read:   list, get, measure (area/perimeter/length takeoff)
     Modify: copy, move, rotate, scale, mirror, offset, array, fillet, erase
 
@@ -142,6 +143,7 @@ async def entity(
         "create_circle": lambda: b.create_circle(d["cx"], d["cy"], d["radius"], d.get("layer")),
         "create_polyline": lambda: b.create_polyline(d["points"], d.get("closed", False), d.get("layer")),
         "create_rectangle": lambda: b.create_rectangle(d["x1"], d["y1"], d["x2"], d["y2"], d.get("layer")),
+        "import_boundary": lambda: b.import_boundary(d.get("points"), d.get("geojson"), d.get("layer", "LOT-LINE")),
         "create_arc": lambda: b.create_arc(d["cx"], d["cy"], d["radius"], d["start_angle"], d["end_angle"], d.get("layer")),
         "create_text": lambda: b.create_text(d["x"], d["y"], d["text"], d.get("height", 2.5), d.get("rotation", 0.0), d.get("layer"), d.get("align")),
         "create_mtext": lambda: b.create_mtext(d["x"], d["y"], d["width"], d["text"], d.get("height", 2.5), d.get("layer")),

@@ -353,6 +353,38 @@ class AIBlueprintBackend:
         return await self.create_polyline(pts, closed=True, layer=layer)
 
     @_mut
+    async def import_boundary(
+        self, points=None, geojson=None, layer="LOT-LINE"
+    ) -> CommandResult:
+        """Import an irregular parcel boundary from survey points or GeoJSON.
+
+        Draws the exterior ring as a closed LWPOLYLINE (one source only) and
+        returns its handle plus area/perimeter/bbox. The handle plugs directly
+        into the compliance engine (setbacks, lot coverage) like any boundary.
+        """
+        from aiblueprint_mcp.parcel import (
+            boundary_ring,
+            bounding_box,
+            ring_area,
+            ring_perimeter,
+        )
+
+        try:
+            ring = boundary_ring(points=points, geojson=geojson)
+        except ValueError as ex:
+            raise CommandError(str(ex)) from None
+        self._ensure_layer(layer)
+        e = self._msp.add_lwpolyline(ring, close=True, dxfattribs={"layer": layer or "0"})
+        return CommandResult(ok=True, payload={
+            "entity_type": "LWPOLYLINE",
+            "handle": e.dxf.handle,
+            "point_count": len(ring),
+            "area": ring_area(ring),
+            "perimeter": ring_perimeter(ring),
+            "bbox": bounding_box(ring),
+        })
+
+    @_mut
     async def create_arc(self, cx, cy, radius, start_angle, end_angle, layer=None) -> CommandResult:
         self._ensure_layer(layer)
         e = self._msp.add_arc((cx, cy), radius, start_angle, end_angle,
