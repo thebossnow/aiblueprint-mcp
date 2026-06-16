@@ -159,6 +159,83 @@ async def test_export_rejects_unknown_format(backend):
     assert not r.ok and "geojson" in r.error
 
 
+# ── undo / redo ────────────────────────────────────────────────────────
+
+async def _count(backend) -> int:
+    return (await backend.entity_list()).payload["count"]
+
+
+async def test_undo_redo_roundtrip(backend):
+    await backend.create_line(0, 0, 10, 0)
+    assert await _count(backend) == 1
+
+    u = await backend.undo()
+    assert u.ok and u.payload["entity_count"] == 0
+    assert await _count(backend) == 0
+
+    r = await backend.redo()
+    assert r.ok and r.payload["entity_count"] == 1
+    assert await _count(backend) == 1
+
+
+async def test_undo_preserves_handles(backend):
+    h = (await backend.create_line(0, 0, 5, 5)).payload["handle"]
+    await backend.create_circle(1, 1, 2)
+    await backend.undo()  # remove the circle
+    # The line survived with its original handle → still addressable.
+    got = await backend.entity_get(h)
+    assert got.ok and got.payload["type"] == "LINE"
+
+
+async def test_undo_empty_errors(backend):
+    r = await backend.undo()
+    assert not r.ok and "Nothing to undo" in r.error
+
+
+async def test_redo_empty_errors(backend):
+    r = await backend.redo()
+    assert not r.ok and "Nothing to redo" in r.error
+
+
+async def test_new_op_clears_redo(backend):
+    await backend.create_line(0, 0, 1, 1)
+    await backend.undo()           # redo stack now has 1
+    await backend.create_circle(0, 0, 3)  # a fresh mutation clears redo
+    r = await backend.redo()
+    assert not r.ok and "Nothing to redo" in r.error
+
+
+async def test_failed_op_leaves_no_checkpoint(backend):
+    await backend.create_line(0, 0, 1, 1)
+    # A failed mutation must not push an undo entry.
+    bad = await backend.entity_move("does-not-exist", 1, 1)
+    assert not bad.ok
+    await backend.undo()  # the single undo should remove the line
+    assert await _count(backend) == 0
+
+
+async def test_batch_groups_into_one_checkpoint(backend):
+    with backend.batch():
+        await backend.create_line(0, 0, 1, 1)
+        await backend.create_line(1, 1, 2, 2)
+        await backend.create_circle(0, 0, 1)
+    assert await _count(backend) == 3
+    await backend.undo()  # one undo reverts the whole batch
+    assert await _count(backend) == 0
+
+
+async def test_undo_independent_per_document(backend):
+    a = (await backend.drawing_create("a")).payload["handle"]
+    await backend.create_line(0, 0, 1, 1)
+    await backend.drawing_create("b")
+    await backend.create_circle(0, 0, 2)
+    # Undo on b only affects b.
+    await backend.undo()
+    assert await _count(backend) == 0
+    await backend.drawing_switch(a)
+    assert await _count(backend) == 1  # a is untouched
+
+
 async def test_unexpected_error_wrapped(backend):
     # Operating on a missing entity yields a clean error, not a traceback.
     r = await backend.entity_move("does-not-exist", 1, 1)

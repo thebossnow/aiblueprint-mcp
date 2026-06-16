@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Undo/redo** — per-document snapshot stack exposed as `drawing` operations
+  `undo`/`redo`. `AIBlueprintBackend.batch()` groups a multi-op sequence (e.g.
+  site-plan generation) into a single checkpoint.
 - **GeoJSON export** (`view` tool, `export` operation, `format: "geojson"`) —
   serializes modelspace entities to a `FeatureCollection` in drawing coordinates.
 - `view.export` input validation model (format ∈ pdf/png/svg/geojson).

@@ -42,6 +42,18 @@ async def test_generate_explicit_dims(workspace, backend):
     assert p["adu_handle"]
 
 
+async def test_generate_site_plan_is_one_undo_step(workspace, backend):
+    """The whole site plan collapses into a single undo checkpoint."""
+    gen = SitePlanGenerator(backend, _la_session())
+    r = await gen.generate(SitePlanConfig(lot_width=60, lot_depth=120, adu_width=20, adu_depth=25))
+    assert r.ok, r.error
+    assert (await backend.entity_list()).payload["count"] > 5  # many entities drawn
+
+    undone = await backend.undo()
+    assert undone.ok and undone.payload["entity_count"] == 0  # one undo clears the plan
+    assert undone.payload["undo_depth"] == 0
+
+
 async def test_generate_auto_size(workspace, backend):
     """Auto-sized ADU stays within ±100 sq ft of target."""
     s = ProjectSession()

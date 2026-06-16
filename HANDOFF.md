@@ -49,6 +49,7 @@ AIBlueprint MCP is an MCP (Model Context Protocol) server that lets AI coding ag
 - **Auto site-plan generator** (`project.generate_site_plan`) — produces complete DXF from lot dimensions + jurisdiction profile
 - **Jurisdiction-aware compliance engine** — branching questionnaire → resolved rule stack (CA state → county → city → HOA) → compliance checks (area, setbacks, coverage, height, full report)
 - **Multi-document sessions** — drawing create/list/switch with handles
+- **Undo/redo** — per-document snapshot stack (drawing undo/redo); `backend.batch()` groups a multi-op sequence into one checkpoint
 - **Entity measure** — area/perimeter/length quantity takeoff
 - **Block operations** — define, insert, insert_with_attributes, get/update attributes
 - **View export** to PNG/PDF/SVG and GeoJSON (`FeatureCollection` in drawing coordinates)
@@ -62,7 +63,6 @@ Each gap below is tracked as a GitHub issue — the [issue tracker](https://gith
 - No coverage reporting in CI — [#10](https://github.com/thebossnow/aiblueprint-mcp/issues/10)
 - No PyPI publication / versioned releases / changelog — [#11](https://github.com/thebossnow/aiblueprint-mcp/issues/11)
 - California-only jurisdiction data (format is extensible, just needs data entry) — [#12](https://github.com/thebossnow/aiblueprint-mcp/issues/12)
-- No undo/redo command stack — [#13](https://github.com/thebossnow/aiblueprint-mcp/issues/13)
 - Property boundaries are rectangular only (no irregular-parcel import from surveys/GeoJSON) — [#14](https://github.com/thebossnow/aiblueprint-mcp/issues/14)
 - Live LibreCAD backend (bivex TCP bridge) not yet implemented — [#1](https://github.com/thebossnow/aiblueprint-mcp/issues/1)
 

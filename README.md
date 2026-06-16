@@ -64,6 +64,8 @@ Add to your MCP client (Claude Desktop, Hermes, etc.):
 | `save` | Save to path (within workspace) | `{path?}` |
 | `list` | List all open drawings in the session | — |
 | `switch` | Make another open drawing current | `{handle}` |
+| `undo` | Revert the current drawing to the previous checkpoint | — |
+| `redo` | Re-apply the most recently undone checkpoint | — |
 
 Multiple drawings can be open at once. Each `create`/`open` returns a `handle`;
 use `switch` to change which drawing subsequent operations target. File paths
@@ -213,7 +215,7 @@ with a clear message — `{"ok": false, "error": "Invalid input for entity.creat
 
 ```bash
 uv sync --extra dev      # install dev dependencies (pytest, ruff)
-uv run pytest -q         # run the test suite (107 tests)
+uv run pytest -q         # run the test suite (118 tests)
 uv run ruff check src tests
 ```
 
@@ -229,7 +231,6 @@ Tracked in the [issue tracker](https://github.com/thebossnow/aiblueprint-mcp/iss
 - Coverage reporting in CI ([#10](https://github.com/thebossnow/aiblueprint-mcp/issues/10))
 - PyPI publication, versioned releases, changelog ([#11](https://github.com/thebossnow/aiblueprint-mcp/issues/11))
 - Jurisdiction data beyond California ([#12](https://github.com/thebossnow/aiblueprint-mcp/issues/12))
-- Undo/redo command stack ([#13](https://github.com/thebossnow/aiblueprint-mcp/issues/13))
 - Irregular parcels (GeoJSON / survey-point boundaries) ([#14](https://github.com/thebossnow/aiblueprint-mcp/issues/14))
 - Live LibreCAD backend via bivex's TCP bridge ([#1](https://github.com/thebossnow/aiblueprint-mcp/issues/1))
 
