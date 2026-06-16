@@ -56,13 +56,16 @@ AIBlueprint MCP is an MCP (Model Context Protocol) server that lets AI coding ag
 
 ### What's Not Yet Done (Known Gaps)
 
-- No Docker/container support (friction for new users who need LibreCAD)
-- California-only jurisdiction data (format is extensible, just needs data entry)
-- No undo/redo command stack
-- No coverage reporting in CI
-- No PyPI publication
-- No versioned releases / changelog
-- Property boundaries are rectangular only (no irregular-parcel import from surveys/GeoJSON)
+Each gap below is tracked as a GitHub issue — the [issue tracker](https://github.com/thebossnow/aiblueprint-mcp/issues) is the source of truth for "what's left."
+
+- No Docker/container support (friction for new users who need LibreCAD) — [#9](https://github.com/thebossnow/aiblueprint-mcp/issues/9)
+- No coverage reporting in CI — [#10](https://github.com/thebossnow/aiblueprint-mcp/issues/10)
+- No PyPI publication / versioned releases / changelog — [#11](https://github.com/thebossnow/aiblueprint-mcp/issues/11)
+- California-only jurisdiction data (format is extensible, just needs data entry) — [#12](https://github.com/thebossnow/aiblueprint-mcp/issues/12)
+- No undo/redo command stack — [#13](https://github.com/thebossnow/aiblueprint-mcp/issues/13)
+- Property boundaries are rectangular only (no irregular-parcel import from surveys/GeoJSON) — [#14](https://github.com/thebossnow/aiblueprint-mcp/issues/14)
+- Export limited to PNG (PDF/SVG/GeoJSON not fully wired) — [#15](https://github.com/thebossnow/aiblueprint-mcp/issues/15)
+- Live LibreCAD backend (bivex TCP bridge) not yet implemented — [#1](https://github.com/thebossnow/aiblueprint-mcp/issues/1)
 
 ---
 
