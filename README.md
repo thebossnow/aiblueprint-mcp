@@ -1,5 +1,7 @@
 # AIBlueprint MCP
 
+[![CI](https://github.com/thebossnow/aiblueprint-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/thebossnow/aiblueprint-mcp/actions/workflows/ci.yml)
+
 > MCP server for headless DXF generation via ezdxf + LibreCAD preview — purpose-built for site plans, architectural drafting, and pool bid layouts.
 
 Built on the ezdxf backend architecture from [autocad-mcp](https://github.com/puran-water/autocad-mcp) (MIT), extended with offset, fillet, dimension overrides, solid fills, and LibreCAD integration. No AutoCAD required — runs on Linux, macOS, WSL, or a Chromebook.
