@@ -51,7 +51,7 @@ AIBlueprint MCP is an MCP (Model Context Protocol) server that lets AI coding ag
 - **Multi-document sessions** — drawing create/list/switch with handles
 - **Entity measure** — area/perimeter/length quantity takeoff
 - **Block operations** — define, insert, insert_with_attributes, get/update attributes
-- **View export** to PNG/PDF/SVG
+- **View export** to PNG/PDF/SVG and GeoJSON (`FeatureCollection` in drawing coordinates)
 - **CI pipeline** — GitHub Actions, ruff lint + pytest matrix, all passing
 
 ### What's Not Yet Done (Known Gaps)
@@ -64,7 +64,6 @@ Each gap below is tracked as a GitHub issue — the [issue tracker](https://gith
 - California-only jurisdiction data (format is extensible, just needs data entry) — [#12](https://github.com/thebossnow/aiblueprint-mcp/issues/12)
 - No undo/redo command stack — [#13](https://github.com/thebossnow/aiblueprint-mcp/issues/13)
 - Property boundaries are rectangular only (no irregular-parcel import from surveys/GeoJSON) — [#14](https://github.com/thebossnow/aiblueprint-mcp/issues/14)
-- Export limited to PNG (PDF/SVG/GeoJSON not fully wired) — [#15](https://github.com/thebossnow/aiblueprint-mcp/issues/15)
 - Live LibreCAD backend (bivex TCP bridge) not yet implemented — [#1](https://github.com/thebossnow/aiblueprint-mcp/issues/1)
 
 ---

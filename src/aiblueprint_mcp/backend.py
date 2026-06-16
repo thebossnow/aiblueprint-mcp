@@ -19,6 +19,7 @@ from __future__ import annotations
 import base64
 import functools
 import io
+import json
 import math
 import subprocess
 from collections.abc import Callable
@@ -783,16 +784,73 @@ class AIBlueprintBackend:
 
     @_op
     async def export(self, fmt: str = "pdf", path: str | None = None) -> CommandResult:
-        """Export the current drawing to PNG/PDF/SVG in the workspace."""
+        """Export the current drawing to PNG/PDF/SVG/GeoJSON in the workspace."""
         fmt = fmt.lower()
-        if fmt not in ("pdf", "png", "svg"):
-            raise CommandError("export format must be pdf, png, or svg")
+        if fmt not in ("pdf", "png", "svg", "geojson"):
+            raise CommandError("export format must be pdf, png, svg, or geojson")
         st = self._state()
-        target = path or f"{st.name}.{fmt}"
+        ext = "geojson" if fmt == "geojson" else fmt
+        target = path or f"{st.name}.{ext}"
         resolved = self.config.resolve_path(target)
         resolved.parent.mkdir(parents=True, exist_ok=True)
-        resolved.write_bytes(self._render_bytes(fmt))
+        if fmt == "geojson":
+            resolved.write_text(json.dumps(self._to_geojson(), indent=2))
+        else:
+            resolved.write_bytes(self._render_bytes(fmt))
         return CommandResult(ok=True, payload={"path": str(resolved), "format": fmt})
+
+    def _to_geojson(self) -> dict[str, Any]:
+        """Serialize modelspace entities to a GeoJSON FeatureCollection.
+
+        Geometry is emitted in drawing (DXF) coordinates — no georeferencing is
+        applied. Each feature carries ``layer``, ``dxftype``, and ``handle`` in
+        its properties so the source entity is traceable. Entity → geometry:
+        LINE → LineString; LWPOLYLINE → Polygon if closed else LineString;
+        CIRCLE/ARC → Point at the center (radius/angles in properties);
+        TEXT/MTEXT/INSERT → Point at the insertion point.
+        """
+        features: list[dict[str, Any]] = []
+        for e in self._msp:
+            t = e.dxftype()
+            props: dict[str, Any] = {
+                "layer": e.dxf.get("layer", "0"),
+                "dxftype": t,
+                "handle": e.dxf.handle,
+            }
+            geom: dict[str, Any] | None = None
+            if t == "LINE":
+                geom = {
+                    "type": "LineString",
+                    "coordinates": [list(e.dxf.start)[:2], list(e.dxf.end)[:2]],
+                }
+            elif t == "LWPOLYLINE":
+                coords = [[float(p[0]), float(p[1])] for p in e.get_points(format="xy")]
+                if e.closed and len(coords) >= 3:
+                    ring = coords + [coords[0]]
+                    geom = {"type": "Polygon", "coordinates": [ring]}
+                else:
+                    geom = {"type": "LineString", "coordinates": coords}
+            elif t == "CIRCLE":
+                props["radius"] = e.dxf.radius
+                geom = {"type": "Point", "coordinates": list(e.dxf.center)[:2]}
+            elif t == "ARC":
+                props["radius"] = e.dxf.radius
+                props["start_angle"] = e.dxf.start_angle
+                props["end_angle"] = e.dxf.end_angle
+                geom = {"type": "Point", "coordinates": list(e.dxf.center)[:2]}
+            elif t == "TEXT":
+                props["text"] = e.dxf.text
+                geom = {"type": "Point", "coordinates": list(e.dxf.insert)[:2]}
+            elif t == "MTEXT":
+                props["text"] = e.text
+                geom = {"type": "Point", "coordinates": list(e.dxf.insert)[:2]}
+            elif t == "INSERT":
+                props["block"] = e.dxf.name
+                geom = {"type": "Point", "coordinates": list(e.dxf.insert)[:2]}
+            if geom is None:
+                continue
+            features.append({"type": "Feature", "geometry": geom, "properties": props})
+        return {"type": "FeatureCollection", "features": features}
 
     @_op
     async def preview(self, save_first: bool = True) -> CommandResult:

@@ -4,7 +4,7 @@ Each tool operation that takes structured input has a Pydantic model here.
 ``validate(operation, data)`` returns a validated dict (with defaults applied)
 or raises ``ValidationError`` with a clear, LLM-readable message.
 
-This keeps the 6-tool consolidated surface while giving every operation a real
+This keeps the 8-tool consolidated surface while giving every operation a real
 schema and friendly errors instead of raw ``KeyError``s.
 """
 
@@ -261,6 +261,12 @@ class GenerateSitePlan(_Base):
     draw_name: str | None = None
 
 
+# ── view ───────────────────────────────────────────────────────────────
+class ViewExport(_Base):
+    format: Literal["pdf", "png", "svg", "geojson"] = "pdf"
+    path: str | None = None
+
+
 # ── registry ───────────────────────────────────────────────────────────
 _MODELS: dict[str, type[_Base]] = {
     # drawing
@@ -305,6 +311,8 @@ _MODELS: dict[str, type[_Base]] = {
     "block.update_attribute": BlockUpdateAttrib,
     # project
     "project.generate_site_plan": GenerateSitePlan,
+    # view
+    "view.export": ViewExport,
     # annotation
     "annotation.create_text": CreateText,
     "annotation.create_dimension_aligned": DimAligned,
