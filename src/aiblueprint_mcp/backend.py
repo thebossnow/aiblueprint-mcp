@@ -921,10 +921,10 @@ class AIBlueprintBackend:
 
     @_op
     async def export(self, fmt: str = "pdf", path: str | None = None) -> CommandResult:
-        """Export the current drawing to PNG/PDF/SVG/GeoJSON in the workspace."""
+        """Export the current drawing to PNG/PDF/SVG/GeoJSON/IFC in the workspace."""
         fmt = fmt.lower()
-        if fmt not in ("pdf", "png", "svg", "geojson"):
-            raise CommandError("export format must be pdf, png, svg, or geojson")
+        if fmt not in ("pdf", "png", "svg", "geojson", "ifc"):
+            raise CommandError("export format must be pdf, png, svg, geojson, or ifc")
         st = self._state()
         ext = "geojson" if fmt == "geojson" else fmt
         target = path or f"{st.name}.{ext}"
@@ -932,6 +932,9 @@ class AIBlueprintBackend:
         resolved.parent.mkdir(parents=True, exist_ok=True)
         if fmt == "geojson":
             resolved.write_text(json.dumps(self._to_geojson(), indent=2))
+        elif fmt == "ifc":
+            from aiblueprint_mcp.ifc_export import build_ifc_bytes
+            resolved.write_bytes(build_ifc_bytes(self._msp, project_name=st.name))
         else:
             resolved.write_bytes(self._render_bytes(fmt))
         return CommandResult(ok=True, payload={"path": str(resolved), "format": fmt})

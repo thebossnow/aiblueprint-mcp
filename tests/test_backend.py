@@ -159,6 +159,73 @@ async def test_export_rejects_unknown_format(backend):
     assert not r.ok and "geojson" in r.error
 
 
+async def test_export_ifc(backend, workspace):
+    pytest.importorskip("ifcopenshell")
+    import ifcopenshell
+
+    await backend.create_rectangle(0, 0, 30, 50, "LOT-LINE")
+    await backend.create_rectangle(5, 5, 15, 13, "ADU-FOOTPRINT")
+
+    r = await backend.export("ifc")
+    assert r.ok and r.payload["format"] == "ifc"
+    out = workspace / "untitled.ifc"
+    assert out.exists()
+
+    f = ifcopenshell.open(str(out))
+    assert f.schema == "IFC4"
+    assert len(f.by_type("IfcProject")) == 1
+    assert len(f.by_type("IfcSite")) == 1
+    assert len(f.by_type("IfcSlab")) == 1
+    # Rectangle footprint -> 4 perimeter walls.
+    assert len(f.by_type("IfcWall")) == 4
+
+    slab = f.by_type("IfcSlab")[0]
+    assert slab.PredefinedType == "BASESLAB"
+
+    # 10ft x 8ft footprint converted to meters.
+    from aiblueprint_mcp.ifc_export import FEET_TO_METERS
+
+    profile = f.by_type("IfcArbitraryClosedProfileDef")[0]
+    xs = [p.Coordinates[0] for p in profile.OuterCurve.Points]
+    ys = [p.Coordinates[1] for p in profile.OuterCurve.Points]
+    assert max(xs) - min(xs) == pytest.approx(10 * FEET_TO_METERS)
+    assert max(ys) - min(ys) == pytest.approx(8 * FEET_TO_METERS)
+
+    wall = f.by_type("IfcWall")[0]
+    assert wall.ObjectPlacement is not None
+
+
+async def test_export_ifc_without_lot_layer_uses_largest_ring(backend, workspace):
+    pytest.importorskip("ifcopenshell")
+    import ifcopenshell
+
+    # No "lot"/"footprint" layer hints at all: the larger ring becomes the
+    # site boundary, the smaller becomes the one footprint slab/walls.
+    await backend.create_rectangle(0, 0, 30, 50, "boundary")
+    await backend.create_rectangle(5, 5, 15, 13, "structure")
+
+    r = await backend.export("ifc")
+    assert r.ok
+    f = ifcopenshell.open(str(workspace / "untitled.ifc"))
+    assert len(f.by_type("IfcSlab")) == 1
+    assert len(f.by_type("IfcWall")) == 4
+
+
+async def test_export_ifc_missing_dependency_errors_cleanly(backend, monkeypatch):
+    import builtins
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "ifcopenshell":
+            raise ImportError("no ifcopenshell")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    r = await backend.export("ifc")
+    assert not r.ok and "ifcopenshell" in r.error
+
+
 # ── undo / redo ────────────────────────────────────────────────────────
 
 async def _count(backend) -> int:

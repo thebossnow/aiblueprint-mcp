@@ -140,7 +140,15 @@ Example:
 |-----------|-------------|
 | `preview` | Save DXF + render PNG via LibreCAD `dxf2png` — returns file paths |
 | `screenshot` | Render the drawing via matplotlib and return it as a native MCP image (no LibreCAD needed) |
-| `export` | Write a PNG/PDF/SVG raster/vector render or a GeoJSON `FeatureCollection` to the workspace. `data: {format?: "pdf"|"png"|"svg"|"geojson", path?}` |
+| `export` | Write a PNG/PDF/SVG raster/vector render, a GeoJSON `FeatureCollection`, or a minimal IFC4 model to the workspace. `data: {format?: "pdf"|"png"|"svg"|"geojson"|"ifc", path?}` |
+
+**IFC export** is intentionally minimal: aiblueprint drawings are flat 2D with no
+height data, so `ifc` only emits a site boundary plus, for each building-footprint
+polygon, an extruded ground slab and perimeter walls at a fixed default height — no
+doors, windows, roofs, or stairs are fabricated. Footprints are picked up by layer
+name (`LOT`/`PARCEL`/`PROPERTY` → site; `FOOTPRINT`/`BUILDING`/`ADU`/`STRUCTURE` →
+building), the same convention `import_boundary` and the site-plan generator already
+use. Requires the optional `ifcopenshell` dependency: `uv sync --extra ifc`.
 
 ## Hatch Patterns
 
