@@ -137,6 +137,12 @@ def build_ifc_bytes(
     run("aggregate.assign_object", f, relating_object=project, products=[site])
     run("aggregate.assign_object", f, relating_object=site, products=[building])
     run("aggregate.assign_object", f, relating_object=building, products=[storey])
+    # root.create_entity leaves ObjectPlacement null. Spatial elements need an
+    # explicit (identity) IfcLocalPlacement or downstream consumers that expect
+    # a full placement chain can misplace/misread children that carry absolute
+    # coordinates baked into their own geometry (e.g. our slab profiles).
+    for spatial_element in (site, building, storey):
+        run("geometry.edit_object_placement", f, product=spatial_element)
 
     site_ring, footprint_rings = _classify(_closed_rings(msp))
 
@@ -167,6 +173,7 @@ def build_ifc_bytes(
             placement_zx_axes=((0.0, 0.0, -1.0), (1.0, 0.0, 0.0)),
         )
         run("geometry.assign_representation", f, product=slab, representation=slab_rep)
+        run("geometry.edit_object_placement", f, product=slab)
         run("spatial.assign_container", f, products=[slab], relating_structure=storey)
 
         if include_walls:
