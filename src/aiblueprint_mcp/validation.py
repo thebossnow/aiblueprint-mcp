@@ -269,7 +269,7 @@ class ImportBoundary(_Base):
 
 # ── view ───────────────────────────────────────────────────────────────
 class ViewExport(_Base):
-    format: Literal["pdf", "png", "svg", "geojson"] = "pdf"
+    format: Literal["pdf", "png", "svg", "geojson", "ifc"] = "pdf"
     path: str | None = None
 
 

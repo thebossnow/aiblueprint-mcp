@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Minimal IFC4 export** (`view` tool, `export` operation, `format: "ifc"`) —
+  emits a site boundary plus, for each building-footprint polygon (classified
+  by layer name, same convention as `import_boundary`), an extruded ground
+  slab and perimeter walls at a fixed default height. No doors, windows,
+  roofs, or stairs are fabricated — nothing in aiblueprint's flat 2D drawings
+  implies them. New optional `ifc` extra (`ifcopenshell`); new `ifc_export`
+  module.
+
 ## [0.1.1] — 2026-06-16
 
 First release published to PyPI. Adds the following on top of the 0.1.0 surface

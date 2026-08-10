@@ -56,6 +56,10 @@ def test_view_export_accepts_geojson():
     assert validate("view.export", {"format": "geojson"})["format"] == "geojson"
 
 
+def test_view_export_accepts_ifc():
+    assert validate("view.export", {"format": "ifc"})["format"] == "ifc"
+
+
 def test_view_export_rejects_unknown_format():
     with pytest.raises(ValidationError):
         validate("view.export", {"format": "dwg"})
