@@ -102,13 +102,78 @@ class RoomFloorPlanGenerator:
             raise CommandError("island_length must be positive")
         if cfg.island_depth is not None and cfg.island_depth <= 0:
             raise CommandError("island_depth must be positive")
+        if (cfg.island_length is None) != (cfg.island_depth is None):
+            raise CommandError("island_length and island_depth must both be set, or both left unset")
         if cfg.island_orientation not in ("NS", "EW"):
             raise CommandError("island_orientation must be 'NS' or 'EW'")
+
+    def _validate_fit(self, cfg: RoomFloorPlanConfig, north_len: float, cab_d: float) -> None:
+        """Check that derived geometry actually fits inside the room."""
+        w, d = cfg.room_width, cfg.room_depth
+        ns = cfg.north_run_start
+
+        if cab_d >= d:
+            raise CommandError(f"cabinet_depth {cab_d:.1f} ft exceeds room_depth {d:.1f} ft")
+        if ns + north_len > w:
+            raise CommandError(
+                f"north cabinet run ({ns:.1f}..{ns + north_len:.1f} ft) exceeds room_width {w:.1f} ft"
+            )
+        if cfg.east_run_length > d:
+            raise CommandError(f"east_run_length {cfg.east_run_length:.1f} ft exceeds room_depth {d:.1f} ft")
+
+        # Fixed-size appliances must stay within the actual north cabinet run.
+        appliance_east_edge = ns
+        if cfg.include_dishwasher:
+            appliance_east_edge = max(appliance_east_edge, ns + 2.3)
+        if cfg.include_sink:
+            appliance_east_edge = max(appliance_east_edge, ns + 5.4)
+        if cfg.include_range:
+            appliance_east_edge = max(appliance_east_edge, ns + 9.0)
+        if appliance_east_edge > ns + north_len:
+            raise CommandError(
+                f"appliance layout needs a north run of at least {appliance_east_edge - ns:.1f} ft, "
+                f"but north_run_length is {north_len:.1f} ft"
+            )
+
+        if cfg.include_fridge:
+            fr_w, fr_y = 3.0, 2.2
+            if fr_y + fr_w > d:
+                raise CommandError(
+                    f"fridge (y={fr_y:.1f}..{fr_y + fr_w:.1f}) exceeds room_depth {d:.1f} ft"
+                )
+            if cfg.east_run_length > 0:
+                east_run_y0 = d - cfg.east_run_length
+                if fr_y + fr_w > east_run_y0:
+                    raise CommandError(
+                        f"fridge (y={fr_y:.1f}..{fr_y + fr_w:.1f} ft) overlaps the east cabinet run "
+                        f"(y={east_run_y0:.1f}..{d:.1f} ft) — increase room_depth or reduce east_run_length"
+                    )
+
+        if cfg.island_length is not None and cfg.island_depth is not None:
+            iw, ih = self._island_dims(cfg)
+            ix, iy = self._island_pos(cfg, iw)
+            if ix < 0 or ix + iw > w or iy < 0 or iy + ih > d:
+                raise CommandError(
+                    f"island ({ix:.1f}, {iy:.1f}) to ({ix + iw:.1f}, {iy + ih:.1f}) "
+                    f"doesn't fit within the room ({w:.1f} x {d:.1f} ft)"
+                )
+
+    def _island_dims(self, cfg: RoomFloorPlanConfig) -> tuple[float, float]:
+        if cfg.island_orientation == "NS":
+            return cfg.island_depth, cfg.island_length  # short E-W, long N-S
+        return cfg.island_length, cfg.island_depth
+
+    def _island_pos(self, cfg: RoomFloorPlanConfig, iw: float) -> tuple[float, float]:
+        # Default placement: centered horizontally, with clearance from south wall
+        ix = cfg.island_x if cfg.island_x is not None else (cfg.room_width - iw) / 2
+        iy = cfg.island_y if cfg.island_y is not None else 3.0
+        return ix, iy
 
     async def _generate(self, cfg: RoomFloorPlanConfig) -> CommandResult:
         # Defaults
         north_len = cfg.north_run_length if cfg.north_run_length is not None else max(1.0, cfg.room_width - 3.0)
         cab_d = cfg.cabinet_depth
+        self._validate_fit(cfg, north_len, cab_d)
 
         r = await self._b.drawing_create(cfg.draw_name or f"{cfg.room_type}_plan")
         if not r.ok:
@@ -188,14 +253,8 @@ class RoomFloorPlanGenerator:
         if cfg.island_length is None or cfg.island_depth is None:
             return None
 
-        if cfg.island_orientation == "NS":
-            iw, ih = cfg.island_depth, cfg.island_length  # short E-W, long N-S
-        else:
-            iw, ih = cfg.island_length, cfg.island_depth
-
-        # Default placement: centered horizontally, with clearance from south wall
-        ix = cfg.island_x if cfg.island_x is not None else (cfg.room_width - iw) / 2
-        iy = cfg.island_y if cfg.island_y is not None else 3.0
+        iw, ih = self._island_dims(cfg)
+        ix, iy = self._island_pos(cfg, iw)
 
         r = await self._b.create_rectangle(ix, iy, ix + iw, iy + ih, "ISLAND")
         handle = r.payload.get("handle", "") if r.ok else ""
@@ -276,12 +335,8 @@ class RoomFloorPlanGenerator:
 
         # Island dimensions if present
         if cfg.island_length is not None and cfg.island_depth is not None:
-            if cfg.island_orientation == "NS":
-                iw, ih = cfg.island_depth, cfg.island_length
-            else:
-                iw, ih = cfg.island_length, cfg.island_depth
-            ix = cfg.island_x if cfg.island_x is not None else (w - iw) / 2
-            iy = cfg.island_y if cfg.island_y is not None else 3.0
+            iw, ih = self._island_dims(cfg)
+            ix, iy = self._island_pos(cfg, iw)
             await self._b.create_dimension_aligned(ix, iy, ix + iw, iy, -3.5, ov)
             await self._b.create_dimension_aligned(ix, iy, ix, iy + ih, -3.5, ov)
 
