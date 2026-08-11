@@ -22,7 +22,7 @@ import os
 # EDIT THIS SECTION FOR EACH NEW JOB
 # ---------------------------------------------------------------------------
 GEOMETRY = {
-    "address": "4302 Wind River, Oceanside, CA 92057",
+    "address": "123 Example St, Anytown, CA 90000",
     "title": "EXISTING KITCHEN FLOOR PLAN",
     "room_w": 13.4,          # feet – east-west
     "room_d": 10.75,         # feet – north-south
