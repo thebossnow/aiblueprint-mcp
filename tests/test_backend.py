@@ -194,6 +194,16 @@ async def test_export_ifc(backend, workspace):
     wall = f.by_type("IfcWall")[0]
     assert wall.ObjectPlacement is not None
 
+    # Every spatial element and the slab must also carry an explicit
+    # placement, not just walls (regression test for #28).
+    site = f.by_type("IfcSite")[0]
+    building = f.by_type("IfcBuilding")[0]
+    storey = f.by_type("IfcBuildingStorey")[0]
+    assert site.ObjectPlacement is not None
+    assert building.ObjectPlacement is not None
+    assert storey.ObjectPlacement is not None
+    assert slab.ObjectPlacement is not None
+
 
 async def test_export_ifc_without_lot_layer_uses_largest_ring(backend, workspace):
     pytest.importorskip("ifcopenshell")
