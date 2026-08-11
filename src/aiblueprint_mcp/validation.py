@@ -261,6 +261,33 @@ class GenerateSitePlan(_Base):
     draw_name: str | None = None
 
 
+class GenerateRoomPlan(_Base):
+    """Interior room floor plan (kitchen, bath, laundry, etc.)."""
+
+    room_width: float = Field(gt=0)
+    room_depth: float = Field(gt=0)
+    room_type: Literal["kitchen", "bath", "laundry", "office", "generic"] = "kitchen"
+    island_length: float | None = Field(default=None, gt=0)
+    island_depth: float | None = Field(default=None, gt=0)
+    island_orientation: Literal["NS", "EW"] = "NS"
+    island_x: float | None = None
+    island_y: float | None = None
+    cabinet_depth: float = Field(default=2.0, gt=0)
+    north_run_start: float = 1.5
+    north_run_length: float | None = Field(default=None, gt=0)
+    east_run_length: float = Field(default=3.5, ge=0)
+    include_sink: bool = True
+    include_range: bool = True
+    include_dishwasher: bool = True
+    include_fridge: bool = True
+    sliding_door_start: float | None = 1.8
+    sliding_door_length: float | None = Field(default=6.0, gt=0)
+    title: str = "EXISTING ROOM FLOOR PLAN"
+    address: str = "Example Address, City, CA"
+    notes: list[str] = []
+    draw_name: str | None = None
+
+
 class ImportBoundary(_Base):
     points: list[Any] | None = None
     geojson: dict[str, Any] | None = None
@@ -318,6 +345,7 @@ _MODELS: dict[str, type[_Base]] = {
     "block.update_attribute": BlockUpdateAttrib,
     # project
     "project.generate_site_plan": GenerateSitePlan,
+    "project.generate_room_plan": GenerateRoomPlan,
     # view
     "view.export": ViewExport,
     # annotation

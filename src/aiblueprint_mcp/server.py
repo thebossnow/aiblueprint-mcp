@@ -365,6 +365,11 @@ async def project(operation: str, data: dict | None = None) -> str:
                            resolved profile. data: {lot_width, lot_depth,
                            adu_width?, adu_depth?, adu_position?, draw_name?}
                            Returns drawing handle + layout summary.
+      generate_room_plan — Generate a dimensioned interior room floor plan
+                           (kitchen, bath, laundry, office, generic) as DXF.
+                           data: {room_width, room_depth, room_type?,
+                           island_length?, island_depth?, island_orientation?,
+                           ...} Returns drawing handle + layout summary.
     """
     data = data or {}
     p = _get_project()
@@ -434,6 +439,17 @@ async def project(operation: str, data: dict | None = None) -> str:
         b = await _get_backend()
         gen = SitePlanGenerator(b, p)
         r = await gen.generate(SitePlanConfig(**d))
+        return _result(r)
+
+    elif operation == "generate_room_plan":
+        try:
+            d = _check("project", "generate_room_plan", data)
+        except ValidationError as ve:
+            return _err(f"Invalid input for project.generate_room_plan: {ve}")
+        from aiblueprint_mcp.room_plan_generator import RoomFloorPlanConfig, RoomFloorPlanGenerator
+        b = await _get_backend()
+        gen = RoomFloorPlanGenerator(b)
+        r = await gen.generate(RoomFloorPlanConfig(**d))
         return _result(r)
 
     else:
