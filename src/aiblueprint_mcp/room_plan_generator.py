@@ -11,11 +11,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Any, Literal
+from typing import Literal
 
 from .backend import AIBlueprintBackend
 from .types import CommandError, CommandResult
-
 
 RoomType = Literal["kitchen", "bath", "laundry", "office", "generic"]
 

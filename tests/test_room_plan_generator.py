@@ -4,15 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from aiblueprint_mcp.backend import AIBlueprintBackend
 from aiblueprint_mcp.room_plan_generator import RoomFloorPlanConfig, RoomFloorPlanGenerator
-
-
-@pytest.fixture
-async def backend():
-    b = AIBlueprintBackend()
-    await b.initialize()
-    return b
 
 
 @pytest.mark.asyncio
