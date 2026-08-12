@@ -1010,17 +1010,24 @@ class AIBlueprintBackend:
             )
 
         import os
+        # dxf2png always resolves -o relative to the DXF's directory, even
+        # when given an absolute path (it prepends cwd unconditionally), so
+        # both paths must be passed as bare filenames with cwd=workspace.
+        # It also exits 0 even when it fails to write the file, so success
+        # must be verified by checking the output actually appeared.
+        if png_path.exists():
+            png_path.unlink()
         try:
             result = subprocess.run(
-                [str(librecad), "dxf2png", "-o", str(png_path), str(dxf_path)],
+                [str(librecad), "dxf2png", "-o", png_path.name, dxf_path.name],
                 capture_output=True, text=True, timeout=15,
                 env={**os.environ, "DISPLAY": self.config.display},
                 cwd=str(self.config.workspace),
             )
         except subprocess.TimeoutExpired as exc:
             raise CommandError("dxf2png timed out") from exc
-        if result.returncode != 0:
-            raise CommandError(result.stderr.strip() or "dxf2png failed")
+        if result.returncode != 0 or not png_path.exists():
+            raise CommandError(result.stderr.strip() or "dxf2png failed to produce a PNG")
         return CommandResult(ok=True, payload={
             "dxf_path": str(dxf_path), "png_path": str(png_path),
             "entity_count": len(st.msp),

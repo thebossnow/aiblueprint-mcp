@@ -9,6 +9,7 @@ then dispatches to operation-specific backend methods.
 from __future__ import annotations
 
 import json
+import sys
 
 import structlog
 from mcp.server.fastmcp import FastMCP, Image
@@ -17,6 +18,10 @@ from aiblueprint_mcp.backend import AIBlueprintBackend
 from aiblueprint_mcp.compliance_engine import ComplianceEngine
 from aiblueprint_mcp.project_state import ProjectSession
 from aiblueprint_mcp.validation import ValidationError, validate
+
+# structlog defaults to stdout, which would corrupt the MCP JSON-RPC stdio
+# stream — every log record must go to stderr instead.
+structlog.configure(logger_factory=structlog.PrintLoggerFactory(file=sys.stderr))
 
 log = structlog.get_logger()
 mcp = FastMCP("aiblueprint-mcp")

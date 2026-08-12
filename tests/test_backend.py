@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import pathlib
 
 import ezdxf
 import pytest
@@ -157,6 +158,19 @@ async def test_export_geojson(backend, workspace):
 async def test_export_rejects_unknown_format(backend):
     r = await backend.export("dwg")
     assert not r.ok and "geojson" in r.error
+
+
+async def test_preview_renders_png(backend, workspace):
+    from aiblueprint_mcp.config import Config
+
+    if not Config.from_env().librecad_bin.exists():
+        pytest.skip("no librecad binary available in this environment")
+
+    await backend.create_rectangle(0, 0, 10, 10, "outline")
+    r = await backend.preview()
+    assert r.ok, r.error
+    png_path = pathlib.Path(r.payload["png_path"])
+    assert png_path.exists() and png_path.stat().st_size > 0
 
 
 async def test_export_ifc(backend, workspace):
