@@ -60,7 +60,6 @@ AIBlueprint MCP is an MCP (Model Context Protocol) server that lets AI coding ag
 
 Each gap below is tracked as a GitHub issue — the [issue tracker](https://github.com/thebossnow/aiblueprint-mcp/issues) is the source of truth for "what's left."
 
-- No Docker/container support (friction for new users who need LibreCAD) — [#9](https://github.com/thebossnow/aiblueprint-mcp/issues/9)
 - No coverage reporting in CI — [#10](https://github.com/thebossnow/aiblueprint-mcp/issues/10)
 - No PyPI publication / versioned releases / changelog — [#11](https://github.com/thebossnow/aiblueprint-mcp/issues/11)
 - California-only jurisdiction data (format is extensible, just needs data entry) — [#12](https://github.com/thebossnow/aiblueprint-mcp/issues/12)
@@ -245,7 +244,6 @@ uv run aiblueprint-mcp
 
 | # | Item | Effort |
 |---|------|--------|
-| 8 | Dockerize the server (bundle LibreCAD + MCP server, publish to ghcr.io) | 2-3 hrs |
 | 9 | Add stdio e2e integration test (spawn server, JSON-RPC handshake, tool calls) | 2 hrs |
 | 10 | Add `--version` flag and health check endpoint (`drawing(health)`) | 1 hr |
 | 11 | Publish to PyPI via CI on tagged releases | 1 hr + CI |
