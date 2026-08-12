@@ -367,8 +367,12 @@ async def project(operation: str, data: dict | None = None) -> str:
       counties          — List all CA counties in the database.
       cities            — List all CA cities in the database.
       generate_site_plan — Generate a code-compliant DXF site plan from the
-                           resolved profile. data: {lot_width, lot_depth,
-                           adu_width?, adu_depth?, adu_position?, draw_name?}
+                           resolved profile. Provide exactly one lot source:
+                           {lot_width, lot_depth} for a rectangular lot, or
+                           {lot_boundary: [[x,y],...]} / {lot_boundary_handle}
+                           (from entity.import_boundary) for an irregular
+                           (e.g. L-shaped, trapezoidal) lot. Plus optional
+                           adu_width?, adu_depth?, adu_position?, draw_name?
                            Returns drawing handle + layout summary.
       generate_room_plan — Generate a dimensioned interior room floor plan
                            (kitchen, bath, laundry, office, generic) as DXF.

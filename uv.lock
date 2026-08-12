@@ -22,6 +22,7 @@ dependencies = [
     { name = "mcp", extra = ["cli"] },
     { name = "pillow" },
     { name = "pydantic" },
+    { name = "shapely" },
     { name = "structlog" },
 ]
 
@@ -50,6 +51,7 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
+    { name = "shapely", specifier = ">=2.0" },
     { name = "structlog", specifier = ">=24.0.0" },
 ]
 provides-extras = ["ifc", "dev"]
