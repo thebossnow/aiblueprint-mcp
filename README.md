@@ -31,7 +31,36 @@ export AIBLUEPRINT_LIBRECAD_BIN=/path/to/librecad
 export AIBLUEPRINT_WORKSPACE=/path/to/workspace
 ```
 
-**Don't have LibreCAD?** The server works without it — you just won't get PNG previews. [Build from source](https://docs.librecad.org/en/latest/appx/build.html) or install via your package manager (`sudo apt install librecad` on Debian/Ubuntu).
+**Don't have LibreCAD?** The server works without it — you just won't get PNG previews. Note that `dxf2png` (the console converter previews depend on) was only added in LibreCAD v2.2.1 — Debian/Ubuntu's packaged `librecad` predates it, so `apt install librecad` alone won't give you working previews. Grab an [official release AppImage](https://github.com/LibreCAD/LibreCAD/releases) (v2.2.1 or later) instead, or use the [Docker image](#docker) below, which bundles a working build.
+
+### Docker
+
+The published image bundles a working LibreCAD build alongside the server, so previews work out of the box with no local LibreCAD install:
+
+```bash
+docker run --rm -i \
+  -v /path/to/workspace:/workspace \
+  ghcr.io/thebossnow/aiblueprint-mcp:latest
+```
+
+MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "aiblueprint-mcp": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-v", "/path/to/workspace:/workspace",
+        "ghcr.io/thebossnow/aiblueprint-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+Mount a host directory at `/workspace` to access generated DXF/PNG files outside the container; omit `-v` to keep everything ephemeral inside the container's filesystem.
 
 ### MCP Client Configuration
 
