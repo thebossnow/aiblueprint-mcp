@@ -46,7 +46,7 @@ AIBlueprint MCP is an MCP (Model Context Protocol) server that lets AI coding ag
 - **LibreCAD preview** via dxf2png + matplotlib screenshot fallback
 - **Pydantic input validation** on all 40+ operation paths with LLM-friendly error messages
 - **Workspace path confinement** — rejects `../` traversal and absolute-path escapes
-- **Auto site-plan generator** (`project.generate_site_plan`) — produces complete DXF from lot dimensions + jurisdiction profile; also handles irregular (L-shaped, trapezoidal) lots via `lot_boundary`/`lot_boundary_handle` — front/rear/side setback classification and buildable-envelope computation via half-plane intersection (`irregular_lot.py`, shapely-backed), ADU auto-placement with an anchored-then-grid-search fallback
+- **Auto site-plan generator** (`project.generate_site_plan`) — produces complete DXF from lot dimensions + jurisdiction profile; also handles irregular (L-shaped, trapezoidal) lots via `lot_boundary`/`lot_boundary_handle` — front/rear/side setback classification and a buildable envelope computed by subtracting a local per-edge setback strip from the lot polygon (`irregular_lot.py`, shapely-backed — correct on concave/L-shaped lots, unlike a global per-edge half-plane intersection), ADU auto-placement with an anchored-then-grid-search fallback
 - **Jurisdiction-aware compliance engine** — branching questionnaire → resolved rule stack (CA state → county → city → HOA) → compliance checks (area, setbacks, coverage, height, full report)
 - **Multi-document sessions** — drawing create/list/switch with handles
 - **Undo/redo** — per-document snapshot stack (drawing undo/redo); `backend.batch()` groups a multi-op sequence into one checkpoint

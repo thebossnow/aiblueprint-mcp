@@ -6,11 +6,21 @@ this module:
   - classifies each edge as front/rear/side by the compass direction its
     outward normal points (matching the rectangular generator's convention:
     front is south-facing/-Y, rear is north-facing/+Y, side is east/west)
-  - computes the buildable envelope: the region that satisfies every edge's
-    directional setback simultaneously, via half-plane intersection. This is
-    robust for concave/L-shaped lots — naively moving each vertex inward
-    along its edge normals (the approach ``entity_offset`` uses) self-
-    intersects on reflex corners, so it isn't reused here.
+  - computes the buildable envelope: the lot polygon with a local setback
+    strip removed along each edge, sized by that edge's classification.
+    Each strip hugs only its own edge (extended slightly past both endpoints
+    so adjacent strips overlap and miter cleanly at shared corners, convex
+    or reflex) rather than acting as a global constraint — a per-edge
+    setback is inherently a *local* restriction near that particular
+    property line, not a line extending infinitely across the whole lot.
+    (An earlier version of this module intersected global inward half-planes
+    instead: mathematically equivalent to the correct answer for a convex
+    polygon, but wrong on a concave one — a single edge near a notch could
+    reach across and wrongly exclude buildable area on the far side of the
+    lot that has nothing to do with it.) Naively moving each vertex inward
+    along its edge normals and reconnecting (the approach ``entity_offset``
+    uses for a uniform offset) self-intersects on reflex corners, so that
+    isn't reused here either.
   - searches for a placement of a fixed-size ADU footprint inside that
     envelope, preferring the position closest to the requested side (rear
     center/left/right), falling back to a bounded grid search when the
@@ -26,16 +36,30 @@ from __future__ import annotations
 import math
 from typing import Literal
 
-from shapely.geometry import Polygon
+from shapely.geometry import LineString, Polygon
+from shapely.ops import unary_union
 from shapely.validation import make_valid
 
 Point = tuple[float, float]
 EdgeDirection = Literal["front", "rear", "side"]
 
-# Far enough to act as "infinite" when building a half-plane as a giant
-# polygon, without overflowing into numerical noise at typical site-plan
-# scales (tens to low thousands of feet).
-_FAR = 1_000_000.0
+
+def _dedupe_consecutive(ring: list[Point]) -> list[Point]:
+    """Drop consecutive duplicate vertices (including the wrap-around edge).
+
+    A repeated vertex — whether a duplicated closing point or duplicate
+    survey data mid-ring — produces a zero-length edge, which every
+    direction/offset computation below divides by.
+    """
+    if not ring:
+        return ring
+    out = [ring[0]]
+    for p in ring[1:]:
+        if p != out[-1]:
+            out.append(p)
+    if len(out) > 1 and out[0] == out[-1]:
+        out.pop()
+    return out
 
 
 def signed_area(ring: list[Point]) -> float:
@@ -80,27 +104,24 @@ def classify_edge_direction(a: Point, b: Point) -> EdgeDirection:
     return "side"
 
 
-def _inward_half_plane(a: Point, b: Point, distance: float) -> Polygon:
-    """A giant polygon covering the inward side of edge a->b's offset line.
+def _edge_setback_strip(a: Point, b: Point, distance: float) -> Polygon:
+    """The local region within ``distance`` of edge a->b, on its inward side.
 
-    Intersecting an accumulator polygon with this for every edge is a
-    standard, GEOS-robust way to compute "inside every offset boundary line
-    at once" without ever constructing a self-intersecting offset curve.
+    Extended past both endpoints by (distance + a fixed margin) along the
+    edge's own direction so that neighboring edges' strips overlap at a
+    shared corner rather than leaving a sliver ungoverned by either one —
+    correct regardless of whether that corner is convex or reflex.
     """
     dx, dy = b[0] - a[0], b[1] - a[1]
     length = math.hypot(dx, dy)
     ux, uy = dx / length, dy / length
-    nx, ny = uy, -ux  # outward normal
-    inx, iny = -nx, -ny  # inward normal
-
-    mx = (a[0] + b[0]) / 2 + inx * distance
-    my = (a[1] + b[1]) / 2 + iny * distance
-
-    p1 = (mx - ux * _FAR, my - uy * _FAR)
-    p2 = (mx + ux * _FAR, my + uy * _FAR)
-    p3 = (p2[0] + inx * _FAR, p2[1] + iny * _FAR)
-    p4 = (p1[0] + inx * _FAR, p1[1] + iny * _FAR)
-    return Polygon([p1, p2, p3, p4])
+    margin = distance + 1.0
+    ea = (a[0] - ux * margin, a[1] - uy * margin)
+    eb = (b[0] + ux * margin, b[1] + uy * margin)
+    # single_sided buffer: positive distance = left side of a->b's direction.
+    # Our outward normal (uy, -ux) is the *right* side, so the inward side —
+    # the side we want to strip away — is the left side, i.e. positive here.
+    return LineString([ea, eb]).buffer(distance, single_sided=True, cap_style="flat")
 
 
 def buildable_envelope(
@@ -113,22 +134,24 @@ def buildable_envelope(
     convention that only side/rear setbacks constrain the ADU — front
     setback is drawn as a primary-structure reference line only).
     """
-    ring = ensure_ccw(ring)
-    envelope = Polygon(ring)
-    if not envelope.is_valid:
-        envelope = make_valid(envelope)
+    ring = ensure_ccw(_dedupe_consecutive(ring))
+    lot = Polygon(ring)
+    if not lot.is_valid:
+        lot = make_valid(lot)
 
     n = len(ring)
     setbacks = {"front": front_sb, "rear": rear_sb, "side": side_sb}
+    strips = []
     for i in range(n):
         a, b = ring[i], ring[(i + 1) % n]
         sb = setbacks[classify_edge_direction(a, b)]
         if sb <= 0:
             continue
-        envelope = envelope.intersection(_inward_half_plane(a, b, sb))
-        if envelope.is_empty:
-            return envelope
-    return envelope
+        strips.append(_edge_setback_strip(a, b, sb))
+
+    if not strips:
+        return lot
+    return lot.difference(unary_union(strips))
 
 
 def _rect_at(x: float, y: float, w: float, d: float) -> Polygon:

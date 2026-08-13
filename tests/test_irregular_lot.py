@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from shapely.geometry import Point
+
 from aiblueprint_mcp.irregular_lot import (
     buildable_envelope,
     classify_edge_direction,
@@ -57,6 +59,38 @@ def test_buildable_envelope_empty_when_setbacks_exceed_lot():
     ring = [(0, 0), (10, 0), (10, 10), (0, 10)]
     env = buildable_envelope(ring, front_sb=0.0, rear_sb=8.0, side_sb=8.0)
     assert env.is_empty
+
+
+def test_buildable_envelope_setbacks_are_local_not_global_on_concave_lot():
+    """A per-edge setback must only restrict area *near that edge* — an
+    earlier implementation intersected each edge's setback line as a global
+    half-plane, which is only equivalent to the correct answer for a convex
+    polygon. On this L-shaped lot, the notch's own boundary edges wrongly
+    reached across the whole lot and excluded (10, 90): a point >4 ft from
+    every real property line and nowhere near the notch (which occupies
+    x:[40,60], y:[60,100])."""
+    env = buildable_envelope(L_RING, front_sb=0.0, rear_sb=4.0, side_sb=4.0)
+    assert env.contains(Point(10, 90))
+    # ...while the notch itself, and its own setback zone, stay excluded.
+    assert not env.contains(Point(50, 80))
+    assert not env.contains(Point(38, 62))
+
+
+def test_buildable_envelope_dedupes_consecutive_duplicate_vertex():
+    """A duplicated mid-ring vertex (not just a repeated closing point) is a
+    zero-length edge that must not crash the direction/offset math."""
+    ring_with_dupe = [(0, 0), (60, 0), (60, 0), (60, 100), (0, 100)]
+    clean_ring = [(0, 0), (60, 0), (60, 100), (0, 100)]
+    env_dupe = buildable_envelope(ring_with_dupe, front_sb=0.0, rear_sb=4.0, side_sb=4.0)
+    env_clean = buildable_envelope(clean_ring, front_sb=0.0, rear_sb=4.0, side_sb=4.0)
+    assert env_dupe.bounds == env_clean.bounds
+
+
+def test_buildable_envelope_dedupes_repeated_closing_vertex():
+    ring_closed = [*L_RING, L_RING[0]]
+    env_closed = buildable_envelope(ring_closed, front_sb=0.0, rear_sb=4.0, side_sb=4.0)
+    env_open = buildable_envelope(L_RING, front_sb=0.0, rear_sb=4.0, side_sb=4.0)
+    assert env_closed.bounds == env_open.bounds
 
 
 def test_place_adu_rear_center_on_rectangle():

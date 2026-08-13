@@ -220,8 +220,9 @@ async def test_generate_irregular_lot_adu_placement_avoids_notch(workspace, back
     """rear_right placement on an L-shaped lot must not overlap the removed notch.
 
     A naive rectangle-style "anchor to the buildable bbox's east edge" placement
-    (x = bbox_maxx - adu_w = 60 - 20 = 40) would land the ADU squarely inside
-    the removed notch; the grid-search fallback must find a position clear of it.
+    (x = bbox_maxx - adu_w = 56 - 20 = 36, still inside the setback-shrunk
+    envelope's overall bbox but overlapping the notch's own setback zone)
+    doesn't fit; the grid-search fallback must find a position clear of it.
     """
     gen = SitePlanGenerator(backend, _la_session())
     r = await gen.generate(
@@ -229,7 +230,7 @@ async def test_generate_irregular_lot_adu_placement_avoids_notch(workspace, back
     )
     assert r.ok, r.error
     assert r.payload["adu_x_ft"] == 16.0
-    assert r.payload["adu_y_ft"] == 31.0
+    assert r.payload["adu_y_ft"] == 71.0
     adu_x2 = r.payload["adu_x_ft"] + r.payload["adu_width_ft"]
     assert adu_x2 <= 40  # clear of the notch, which starts at x=40
 
