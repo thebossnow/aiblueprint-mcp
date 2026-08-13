@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 __all__ = ["validate", "ValidationError"]
 
@@ -253,12 +253,25 @@ class Leader(_Base):
 
 # ── project ────────────────────────────────────────────────────────────
 class GenerateSitePlan(_Base):
-    lot_width: float = Field(gt=0)
-    lot_depth: float = Field(gt=0)
+    # Rectangular lot source: both lot_width and lot_depth.
+    lot_width: float | None = Field(default=None, gt=0)
+    lot_depth: float | None = Field(default=None, gt=0)
+    # Irregular lot source (pick exactly one, instead of lot_width/lot_depth):
+    # an explicit ring of [x, y] vertices, or the handle of a boundary already
+    # drawn via entity.import_boundary.
+    lot_boundary: list[tuple[float, float]] | None = Field(default=None, min_length=3)
+    lot_boundary_handle: str | None = None
     adu_width: float | None = Field(default=None, gt=0)
     adu_depth: float | None = Field(default=None, gt=0)
     adu_position: Literal["rear_center", "rear_left", "rear_right"] = "rear_center"
     draw_name: str | None = None
+
+    @model_validator(mode="after")
+    def _check_one_lot_source(self) -> GenerateSitePlan:
+        from .plan_generator import validate_lot_source
+
+        validate_lot_source(self.lot_width, self.lot_depth, self.lot_boundary, self.lot_boundary_handle)
+        return self
 
 
 class GenerateRoomPlan(_Base):

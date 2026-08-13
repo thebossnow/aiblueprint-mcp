@@ -63,3 +63,42 @@ def test_view_export_accepts_ifc():
 def test_view_export_rejects_unknown_format():
     with pytest.raises(ValidationError):
         validate("view.export", {"format": "dwg"})
+
+
+def test_generate_site_plan_accepts_rectangular_source():
+    out = validate("project.generate_site_plan", {"lot_width": 60, "lot_depth": 100})
+    assert out["lot_width"] == 60 and out["lot_boundary"] is None
+
+
+def test_generate_site_plan_accepts_irregular_boundary():
+    out = validate("project.generate_site_plan", {"lot_boundary": [[0, 0], [60, 0], [60, 100], [0, 100]]})
+    assert out["lot_width"] is None and out["lot_boundary"]
+
+
+def test_generate_site_plan_accepts_boundary_handle():
+    out = validate("project.generate_site_plan", {"lot_boundary_handle": "3A"})
+    assert out["lot_boundary_handle"] == "3A"
+
+
+def test_generate_site_plan_rejects_no_lot_source():
+    with pytest.raises(ValidationError):
+        validate("project.generate_site_plan", {})
+
+
+def test_generate_site_plan_rejects_multiple_lot_sources():
+    with pytest.raises(ValidationError):
+        validate("project.generate_site_plan", {
+            "lot_width": 60, "lot_depth": 100, "lot_boundary_handle": "3A",
+        })
+
+
+def test_generate_site_plan_rejects_partial_rectangular_source():
+    with pytest.raises(ValidationError):
+        validate("project.generate_site_plan", {"lot_width": 60})
+
+
+def test_generate_site_plan_rejects_malformed_boundary_point():
+    with pytest.raises(ValidationError):
+        validate("project.generate_site_plan", {
+            "lot_boundary": [[0, 0], [60], [60, 100], [0, 100]],
+        })
