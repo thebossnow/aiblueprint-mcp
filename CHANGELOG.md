@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`compliance.check_setbacks` offset the buildable envelope outward, not
+  inward.** `entity_offset`'s positive/negative distance is only "inward"
+  for a counter-clockwise-wound polyline; `check_setbacks` called it with a
+  *negative* distance for what it documented as an inward envelope, which is
+  backwards. `create_rectangle` always produces CCW rectangles (masking the
+  bug for every prior test), but nothing normalizes the winding of an
+  `import_boundary`/GeoJSON boundary, so a CW-wound lot hit this directly.
+  New `parcel.ring_signed_area`/`parcel.inward_distance` compute the correct
+  signed offset from the boundary's actual winding instead of assuming one;
+  `mezcal_export`'s setback-envelope offset (added in the previous entry)
+  now uses the same helper. 6 new tests, including one that offsets the same
+  square lot in both windings and asserts an identical (correctly inward)
+  envelope area.
+
 ### Added
 - **Mezcal bundle export** (`project` tool, `export_mezcal` operation) —
   writes one JSON file merging the site boundary, setback envelope, and

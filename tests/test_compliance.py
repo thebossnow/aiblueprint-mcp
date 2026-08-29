@@ -76,6 +76,34 @@ async def test_check_setbacks_adu_inside_envelope(backend):
     adu = await backend.create_rectangle(10, 10, 30, 35)
     result = await engine.check_setbacks(lot.payload["handle"], adu.payload["handle"])
     assert result.passed
+    # The envelope must actually be *smaller* than the lot (offset inward) —
+    # not just "some polygon the much-smaller ADU happens to fit inside",
+    # which passed even when the envelope offset the wrong direction. A
+    # 4 ft-uniform inward offset of a 100x100 lot -> 92x92 = 8464 sq ft.
+    envelope_handle = result.annotated_handles[0]
+    envelope_area = (await backend.entity_measure(envelope_handle)).payload["area"]
+    assert envelope_area == pytest.approx(8464.0)
+    assert envelope_area < 10_000.0  # smaller than the lot itself
+
+
+async def test_check_setbacks_offsets_inward_regardless_of_boundary_winding(backend):
+    """entity_offset's sign is only "inward" for a CCW-wound ring (see
+    backend.py's _offset_polyline docstring); import_boundary applies no
+    winding normalization (see parcel.py), so a boundary can come in wound
+    either way. check_setbacks must get this right for both."""
+    profile = _make_profile(side_ft=4, rear_ft=4)
+    engine = ComplianceEngine(backend, profile)
+    ccw_points = [[0, 0], [100, 0], [100, 100], [0, 100]]
+    cw_points = list(reversed(ccw_points))
+
+    ccw_lot = await backend.import_boundary(points=ccw_points, layer="LOT-CCW")
+    cw_lot = await backend.import_boundary(points=cw_points, layer="LOT-CW")
+    adu = await backend.create_rectangle(10, 10, 30, 35)
+
+    for lot in (ccw_lot, cw_lot):
+        result = await engine.check_setbacks(lot.payload["handle"], adu.payload["handle"])
+        envelope_area = (await backend.entity_measure(result.annotated_handles[0])).payload["area"]
+        assert envelope_area == pytest.approx(8464.0), f"winding {lot.payload['handle']} offset the wrong way"
 
 
 async def test_check_setbacks_draws_setback_layer(backend):
