@@ -179,6 +179,25 @@ name (`LOT`/`PARCEL`/`PROPERTY` → site; `FOOTPRINT`/`BUILDING`/`ADU`/`STRUCTUR
 building), the same convention `import_boundary` and the site-plan generator already
 use. Requires the optional `ifcopenshell` dependency: `uv sync --extra ifc`.
 
+### `project` — Mezcal bundle export
+
+The `project` tool (see its own docstring for the full intake/jurisdiction
+operation list — `start`/`question`/`answer`/`profile`/`generate_site_plan`/etc.)
+also has an `export_mezcal` operation:
+
+| Operation | Description |
+|-----------|-------------|
+| `export_mezcal` | Write the current drawing's boundary + setback envelope + building footprints — merged with the resolved zoning requirements and a compliance report, when a project profile is available — as one JSON bundle. `data: {path?}` (defaults to `<drawing name>.mezcal.json` in the workspace) |
+
+This is the format the [Pascal editor](https://editor.pascal.app)'s Mezcal
+adapter plugin ([thebossnow/mezcal_adapter_plugin](https://github.com/thebossnow/mezcal_adapter_plugin))
+imports to render a site plan as a native 3D/floor-plan scene node. Same
+footprint-classification convention as the IFC export above; requires a
+closed boundary polyline (draw one or `entity.import_boundary` first).
+`requirements`/`compliance` are only included once `project.answer` has
+resolved at least one real jurisdiction rule — an empty/unresolved profile
+is omitted rather than reported as a false "pass".
+
 ## Hatch Patterns
 
 | Pattern | Use |

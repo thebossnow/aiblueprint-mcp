@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Mezcal bundle export** (`project` tool, `export_mezcal` operation) —
+  writes one JSON file merging the site boundary, setback envelope, and
+  building footprints (classified by the same layer-name convention as
+  `import_boundary`/the IFC export) with the resolved zoning requirements
+  and a compliance report, for the Pascal editor's Mezcal adapter plugin
+  (`thebossnow/mezcal_adapter_plugin`) to import as a native scene node. New
+  `mezcal_export` module; `ifc_export._Ring` gained a `handle` field so both
+  exports share one classifier without disagreeing on which ring is which.
 - **Minimal IFC4 export** (`view` tool, `export` operation, `format: "ifc"`) —
   emits a site boundary plus, for each building-footprint polygon (classified
   by layer name, same convention as `import_boundary`), an extruded ground

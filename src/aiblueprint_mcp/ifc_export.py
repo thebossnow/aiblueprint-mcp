@@ -41,6 +41,9 @@ _FOOTPRINT_LAYER_HINTS = ("footprint", "building", "adu", "structure")
 class _Ring:
     layer: str
     points: list[tuple[float, float]]  # feet, not closing duplicate
+    handle: str = ""  # DXF entity handle — unused by build_ifc_bytes, but
+    # mezcal_export.py reuses this classifier and needs a handle to run
+    # entity_offset/ComplianceEngine checks against the same ring.
 
 
 def _closed_rings(msp) -> list[_Ring]:
@@ -50,7 +53,7 @@ def _closed_rings(msp) -> list[_Ring]:
             continue
         pts = [(float(p[0]), float(p[1])) for p in e.get_points(format="xy")]
         if len(pts) >= 3:
-            rings.append(_Ring(layer=e.dxf.get("layer", "0"), points=pts))
+            rings.append(_Ring(layer=e.dxf.get("layer", "0"), points=pts, handle=e.dxf.handle))
     return rings
 
 
