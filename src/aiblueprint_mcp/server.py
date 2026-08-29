@@ -379,6 +379,15 @@ async def project(operation: str, data: dict | None = None) -> str:
                            data: {room_width, room_depth, room_type?,
                            island_length?, island_depth?, island_orientation?,
                            ...} Returns drawing handle + layout summary.
+      export_mezcal — Export the current drawing's boundary, setback
+                      envelope, and building footprints — merged with the
+                      resolved zoning requirements and a compliance report
+                      when a project profile is available — as one JSON
+                      bundle for the Pascal editor's Mezcal adapter plugin
+                      (thebossnow/mezcal_adapter_plugin). data: {path?}
+                      (defaults to "<drawing name>.mezcal.json" in the
+                      workspace). Requires a closed boundary polyline —
+                      draw one or use entity.import_boundary first.
     """
     data = data or {}
     p = _get_project()
@@ -459,6 +468,13 @@ async def project(operation: str, data: dict | None = None) -> str:
         b = await _get_backend()
         gen = RoomFloorPlanGenerator(b)
         r = await gen.generate(RoomFloorPlanConfig(**d))
+        return _result(r)
+
+    elif operation == "export_mezcal":
+        from aiblueprint_mcp.mezcal_export import export_mezcal
+
+        b = await _get_backend()
+        r = await export_mezcal(b, p.resolved_profile(), data.get("path"))
         return _result(r)
 
     else:
