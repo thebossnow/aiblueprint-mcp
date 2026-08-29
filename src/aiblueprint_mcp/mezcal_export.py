@@ -20,6 +20,7 @@ from typing import Any
 
 from aiblueprint_mcp.compliance_engine import ComplianceEngine
 from aiblueprint_mcp.ifc_export import _classify, _closed_rings
+from aiblueprint_mcp.parcel import inward_distance
 from aiblueprint_mcp.types import CommandError, CommandResult
 
 DEFAULT_FOOTPRINT_HEIGHT_FT = 12.0
@@ -135,15 +136,14 @@ async def build_mezcal_export(backend, profile: dict[str, Any] | None) -> dict[s
     offset_candidates = [v for v in (side_ft, rear_ft) if v is not None]
     if offset_candidates and site_ring.handle:
         # Uniform-offset simplification (smaller of side/rear) — same one
-        # compliance.check_setbacks uses. NOTE: positive distance is inward
-        # for entity_offset (see backend.py's `_offset_polyline`: "positive
-        # distance offsets to the left of each directed edge", and
-        # test_backend.py's test_offset_polyline_direction, which pins
-        # +1.0 -> shrinks, -1.0 -> grows). compliance_engine.py's own
-        # check_setbacks calls entity_offset with a *negative* distance for
-        # what it documents as an inward envelope — that looks backwards;
-        # flagged separately rather than changed here.
-        envelope_result = await backend.entity_offset(site_ring.handle, min(offset_candidates))
+        # compliance.check_setbacks uses. `inward_distance` picks the correct
+        # signed distance from the boundary's actual winding — entity_offset's
+        # positive/negative distance is only "inward" for a CCW-wound ring
+        # (see backend.py's `_offset_polyline` docstring), and nothing
+        # upstream guarantees CCW (create_rectangle always is; import_boundary
+        # / GeoJSON boundaries can be either — see parcel.py).
+        signed_offset = inward_distance(site_ring.points, min(offset_candidates))
+        envelope_result = await backend.entity_offset(site_ring.handle, signed_offset)
         if envelope_result.ok:
             envelope_entity = backend._doc.entitydb.get(envelope_result.payload["handle"])
             if envelope_entity is not None:

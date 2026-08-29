@@ -16,6 +16,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from aiblueprint_mcp.parcel import inward_distance
+
 
 @dataclass
 class CheckResult:
@@ -100,8 +102,20 @@ class ComplianceEngine:
         )
 
         # Create the buildable envelope by offsetting the property boundary inward.
-        # Negative offset = inward for a CCW-wound polyline.
-        envelope_r = await self._b.entity_offset(property_boundary_handle, -offset_dist)
+        # entity_offset's positive/negative distance is only "inward" for a
+        # CCW-wound polyline (see backend.py's _offset_polyline docstring);
+        # nothing guarantees the boundary's winding (create_rectangle is
+        # always CCW, but import_boundary/GeoJSON boundaries can be either —
+        # see parcel.py's ring_signed_area/inward_distance), so compute the
+        # correct sign from the boundary's actual points rather than assume it.
+        boundary_r = await self._b.entity_get(property_boundary_handle)
+        if not boundary_r.ok or not boundary_r.payload.get("points"):
+            return CheckResult(
+                "setbacks", False,
+                message=f"Could not read property boundary geometry: {boundary_r.error or 'no points'}",
+            )
+        signed_offset = inward_distance(boundary_r.payload["points"], offset_dist)
+        envelope_r = await self._b.entity_offset(property_boundary_handle, signed_offset)
         if not envelope_r.ok:
             return CheckResult(
                 "setbacks", False,

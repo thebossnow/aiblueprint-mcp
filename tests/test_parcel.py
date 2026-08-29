@@ -7,10 +7,12 @@ import pytest
 from aiblueprint_mcp.parcel import (
     boundary_ring,
     bounding_box,
+    inward_distance,
     parse_geojson,
     parse_survey_points,
     ring_area,
     ring_perimeter,
+    ring_signed_area,
 )
 
 # An L-shaped (non-rectangular) parcel, area = 100 - 25 = 75.
@@ -91,3 +93,33 @@ def test_metrics():
     assert ring_area(ring) == pytest.approx(12.0)
     assert ring_perimeter(ring) == pytest.approx(14.0)
     assert bounding_box(ring) == {"min_x": 0, "min_y": 0, "max_x": 4, "max_y": 3}
+
+
+def test_ring_signed_area_reflects_winding():
+    ccw = [(0, 0), (4, 0), (4, 3), (0, 3)]
+    cw = list(reversed(ccw))
+    assert ring_signed_area(ccw) == pytest.approx(12.0)
+    assert ring_signed_area(cw) == pytest.approx(-12.0)
+    assert ring_area(ccw) == ring_area(cw) == pytest.approx(12.0)
+
+
+def test_ring_signed_area_l_shape_is_ccw():
+    # boundary_ring/import_boundary apply no winding normalization — this
+    # fixture just documents that L_SHAPE, as literally written above,
+    # happens to be CCW (positive signed area), not that anything enforces it.
+    assert ring_signed_area(L_SHAPE) == pytest.approx(75.0)
+
+
+def test_inward_distance_flips_sign_with_winding():
+    ccw = [(0, 0), (4, 0), (4, 3), (0, 3)]
+    cw = list(reversed(ccw))
+    # Same ring, same requested inward distance, opposite winding ->
+    # entity_offset needs the opposite signed distance to still go inward.
+    assert inward_distance(ccw, 1.0) == pytest.approx(1.0)
+    assert inward_distance(cw, 1.0) == pytest.approx(-1.0)
+    assert inward_distance(ccw, -1.0) == pytest.approx(-1.0)
+
+
+def test_inward_distance_degenerate_ring_passes_through():
+    zero_area = [(0, 0), (1, 0), (2, 0)]  # collinear -> zero signed area
+    assert inward_distance(zero_area, 3.0) == 3.0

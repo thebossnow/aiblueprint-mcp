@@ -131,6 +131,21 @@ async def test_full_bundle_with_adu_footprint(backend):
     assert bundle["warnings"] == ["Verify with local building department."]
 
 
+async def test_setback_envelope_offsets_inward_regardless_of_boundary_winding(backend):
+    """import_boundary applies no winding normalization (parcel.py), so a
+    lot can arrive CW or CCW. The envelope must shrink inward either way —
+    see inward_distance in parcel.py."""
+    ccw_points = [[0, 0], [100, 0], [100, 100], [0, 100]]
+    cw_points = list(reversed(ccw_points))
+    await backend.import_boundary(points=cw_points, layer="LOT-LINE")
+    await backend.create_rectangle(60, 10, 90, 30, layer="ADU-FOOTPRINT")
+    bundle = await build_mezcal_export(backend, _make_profile(side_ft=4, rear_ft=4))
+    # CW input -> the offset polyline's own point order is reversed relative
+    # to the CCW case (it preserves the source ring's winding), so compare
+    # the vertex set rather than an exact ordered list.
+    assert {tuple(p) for p in bundle["setbackEnvelope"]} == {(4, 4), (96, 4), (96, 96), (4, 96)}
+
+
 async def test_compliance_reflects_a_failing_check(backend):
     await backend.create_rectangle(0, 0, 100, 100, layer="LOT-LINE")
     # 30x40 = 1200 sq ft, over the 600 sq ft max.

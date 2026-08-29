@@ -113,15 +113,52 @@ def _dedupe_closing(ring: list[Point]) -> list[Point]:
     return ring
 
 
-def ring_area(ring: list[Point]) -> float:
-    """Absolute polygon area via the shoelace formula."""
+def ring_signed_area(ring: list[Point]) -> float:
+    """Signed polygon area via the shoelace formula.
+
+    Positive for a counter-clockwise ring, negative for clockwise, zero for a
+    degenerate (self-intersecting or zero-area) ring. Unlike ``ring_area``,
+    which discards the sign, this is what tells you which way a ring winds —
+    needed because nothing in this module normalizes winding direction.
+    ``create_rectangle`` always produces CCW rectangles (by construction of
+    its point order), but ``boundary_ring``/``parse_survey_points``/
+    ``parse_geojson`` above pass survey points or GeoJSON coordinates through
+    as-given: a caller can hand either winding, and this module does not
+    reorder them. Code that offsets a ring "inward" (see ``inward_distance``)
+    must account for that instead of assuming CCW.
+    """
     n = len(ring)
     s = 0.0
     for i in range(n):
         x1, y1 = ring[i]
         x2, y2 = ring[(i + 1) % n]
         s += x1 * y2 - x2 * y1
-    return abs(s) / 2.0
+    return s / 2.0
+
+
+def ring_area(ring: list[Point]) -> float:
+    """Absolute polygon area via the shoelace formula."""
+    return abs(ring_signed_area(ring))
+
+
+def inward_distance(ring: list[Point], distance: float) -> float:
+    """Sign ``distance`` so that offsetting ``ring`` by the result moves its
+    edges toward the interior, regardless of the ring's winding direction.
+
+    ``AIBlueprintBackend.entity_offset``'s positive/negative distance offsets
+    "to the left of each directed edge" (see its docstring in backend.py) —
+    which is the *interior* side only for a counter-clockwise-wound ring, and
+    the *exterior* side for a clockwise one. Since nothing upstream of this
+    guarantees a winding direction (see ``ring_signed_area``), callers that
+    want a setback/buildable envelope — not just "some offset" — need to
+    check the ring's actual winding rather than hardcode a sign. A
+    zero-area ring (degenerate input) passes ``distance`` through unchanged;
+    the offset itself will fail on that input regardless.
+    """
+    signed_area = ring_signed_area(ring)
+    if signed_area == 0:
+        return distance
+    return distance if signed_area > 0 else -distance
 
 
 def ring_perimeter(ring: list[Point]) -> float:
