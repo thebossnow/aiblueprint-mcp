@@ -242,3 +242,19 @@ async def test_full_report_runs_all_checks(backend):
     assert len(report["checks"]) == 3  # area + setbacks + coverage
     assert "passed" in report
     assert "summary" in report
+
+
+async def test_check_setbacks_l_shaped_missing_corner_fails(backend):
+    """An ADU in the notch of an L-shaped lot must fail even though it sits
+    inside the lot's/envelope's bounding box."""
+    profile = _make_profile(side_ft=2, rear_ft=2)
+    engine = ComplianceEngine(backend, profile)
+    lot = await backend.import_boundary(
+        points=[[0, 0], [100, 0], [100, 50], [50, 50], [50, 100], [0, 100]]
+    )
+    adu = await backend.create_rectangle(70, 70, 80, 80)  # in the missing NE corner
+    result = await engine.check_setbacks(lot.payload["handle"], adu.payload["handle"])
+    assert not result.passed
+    inside = await backend.create_rectangle(10, 10, 20, 20)
+    ok = await engine.check_setbacks(lot.payload["handle"], inside.payload["handle"])
+    assert ok.passed

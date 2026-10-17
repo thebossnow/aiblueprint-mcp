@@ -87,3 +87,22 @@ async def test_check_height_accepts_architectural_lengths(server_env):
         operation="check_height", data={"ridge_y": "tall", "grade_y": 0},
     ))
     assert bad["ok"] is False
+
+
+def test_survey_points_accept_architectural_lengths():
+    from aiblueprint_mcp.parcel import parse_survey_points
+
+    ring = parse_survey_points([["0", "0"], ["20'", 0], [{"x": "20'", "y": "10'-6\""}][0], [0, "10'-6\""]])
+    assert ring[1] == (20.0, 0.0)
+    assert ring[2] == (20.0, 10.5)
+
+
+async def test_unknown_county_is_not_a_jurisdiction(server_env):
+    srv = server_env
+    await srv.project(operation="start")
+    await srv.project(operation="answer", data={"question_id": "county", "value": "Other — Not Listed"})
+    r = json.loads(await srv.project(
+        operation="generate_site_plan", data={"lot_width": 60, "lot_depth": 120},
+    ))
+    assert r["ok"] is False
+    assert "jurisdiction" in r["error"].lower()

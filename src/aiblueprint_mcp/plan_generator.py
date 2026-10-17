@@ -177,7 +177,7 @@ class SitePlanGenerator:
             )
         # Reject any footprint over the effective max — explicit dims would
         # otherwise slip past (auto-sizing already clamps to max_sqft).
-        if dims.adu_area > max_sqft + 0.5:
+        if dims.adu_area > max_sqft + 1e-6:
             raise CommandError(
                 f"ADU area {dims.adu_area:.0f} sq ft exceeds the maximum allowed "
                 f"{max_sqft:.0f} sq ft for this jurisdiction. Reduce adu_width/adu_depth."
@@ -262,7 +262,7 @@ class SitePlanGenerator:
             )
         env_minx, env_miny, env_maxx, env_maxy = adu_envelope.bounds
         adu_w, adu_d = _compute_adu_size(target, cfg, env_maxx - env_minx, 0.0, max_sqft)
-        if adu_w * adu_d > max_sqft + 0.5:
+        if adu_w * adu_d > max_sqft + 1e-6:
             raise CommandError(
                 f"ADU area {adu_w * adu_d:.0f} sq ft exceeds the maximum allowed "
                 f"{max_sqft:.0f} sq ft for this jurisdiction. Reduce adu_width/adu_depth."

@@ -113,8 +113,11 @@ class ProjectSession:
 
         # Surface jurisdiction-completeness so callers don't act on state-only
         # defaults thinking they're county/city-specific.
+        # True only when the selected county actually loaded: "Other — Not Listed"
+        # or an unknown name resolves to state rules alone.
+        has_jurisdiction = self._loader.load_county(answers.get("county") or "") is not None
         warnings = list(r.warnings)
-        if not answers.get("county"):
+        if not has_jurisdiction:
             warnings.insert(0, (
                 "No county selected — these requirements fall back to CA state "
                 "defaults only. Select a county (and city) in the intake for "
@@ -123,7 +126,7 @@ class ProjectSession:
 
         return {
             "complete": self._q.complete,
-            "has_jurisdiction": bool(answers.get("county")),
+            "has_jurisdiction": has_jurisdiction,
             "project": {
                 "type": answers.get("project_type", ""),
                 "adu_type": self._adu_type(),

@@ -455,7 +455,7 @@ async def project(operation: str, data: dict | None = None) -> str:
             d = _check("project", "generate_site_plan", data)
         except ValidationError as ve:
             return _err(f"Invalid input for project.generate_site_plan: {ve}")
-        if not p.all_answers().get("county"):
+        if not p.resolved_profile().get("has_jurisdiction"):
             return _err(
                 "No jurisdiction selected. Answer at least the county in the project "
                 "intake before generating a site plan — otherwise the plan would use "

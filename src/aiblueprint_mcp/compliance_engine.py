@@ -16,6 +16,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from shapely.geometry import Polygon
+
 from aiblueprint_mcp.parcel import inward_distance
 
 
@@ -153,12 +155,11 @@ class ComplianceEngine:
             import structlog
             structlog.get_logger().warning("compliance_setback_layer_assign_failed", error=str(exc))
 
-        # Determine pass/fail by actual containment: every ADU footprint vertex
-        # must fall within the buildable envelope's bounding box. For the
-        # axis-aligned rectangles this tool generates that is exact, and for
-        # arbitrary footprints it is a conservative (never falsely-passing) test —
-        # a strict improvement over the old area-only comparison, which let an
-        # ADU poke outside the envelope as long as its total area was smaller.
+        # Determine pass/fail by actual polygon containment: the whole ADU
+        # footprint must lie inside the buildable envelope polygon (edges
+        # included, within a small tolerance for offset round-off). A bounding
+        # box would pass an ADU sitting in the missing corner of an L-shaped lot,
+        # and the old area-only comparison passed any small ADU anywhere.
         adu_r = await self._b.entity_measure(adu_footprint_handle)
         env_r = await self._b.entity_measure(envelope_handle)
         adu_area = adu_r.payload.get("area", 0) if adu_r.ok else 0
@@ -170,12 +171,8 @@ class ComplianceEngine:
         rear_str = f"{rear_ft} ft" if rear_ft else "N/A"
 
         if adu_pts and env_pts:
-            tol = 1e-6
-            exmin, eymin, exmax, eymax = _bbox(env_pts)
-            passed = all(
-                exmin - tol <= x <= exmax + tol and eymin - tol <= y <= eymax + tol
-                for x, y in adu_pts
-            )
+            envelope = Polygon(env_pts).buffer(0)
+            passed = envelope.buffer(1e-6).covers(Polygon(adu_pts).buffer(0))
             detail = (
                 "ADU footprint is fully within the buildable envelope."
                 if passed

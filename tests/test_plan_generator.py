@@ -407,3 +407,13 @@ async def test_generate_irregular_lot_survives_degenerate_setback_zone(workspace
     gen = SitePlanGenerator(backend, s)
     r = await gen.generate(SitePlanConfig(lot_boundary=L_SHAPED_LOT, adu_width=5, adu_depth=5))
     assert r.ok, r.error
+
+
+async def test_generate_rejects_footprint_barely_over_cap(workspace, backend):
+    """No tolerance above the cap: 30.01 x 40 = 1200.4 sq ft must be rejected."""
+    gen = SitePlanGenerator(backend, _la_session())
+    r = await gen.generate(
+        SitePlanConfig(lot_width=120, lot_depth=160, adu_width=30.01, adu_depth=40)
+    )
+    assert not r.ok
+    assert "exceeds the maximum" in r.error.lower()
