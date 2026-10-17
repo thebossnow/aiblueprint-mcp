@@ -10,11 +10,22 @@ schema and friendly errors instead of raw ``KeyError``s.
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, ValidationError, model_validator
+
+from .units import parse_length
 
 __all__ = ["validate", "ValidationError"]
+
+
+def _to_feet(v: Any) -> Any:
+    """Accept feet-inches strings (5'-6\") for length fields; pass numbers through."""
+    return parse_length(v) if isinstance(v, str) else v
+
+
+# A length in decimal feet. Strings like 5'-6", 66", or "5 5" are parsed.
+Ft = Annotated[float, BeforeValidator(_to_feet)]
 
 
 class _Base(BaseModel):
@@ -40,59 +51,59 @@ class DrawingSwitch(_Base):
 
 # ── entity ─────────────────────────────────────────────────────────────
 class CreateLine(_Base):
-    x1: float
-    y1: float
-    x2: float
-    y2: float
+    x1: Ft
+    y1: Ft
+    x2: Ft
+    y2: Ft
     layer: str | None = None
 
 
 class CreateCircle(_Base):
-    cx: float
-    cy: float
-    radius: float = Field(gt=0)
+    cx: Ft
+    cy: Ft
+    radius: Ft = Field(gt=0)
     layer: str | None = None
 
 
 class CreatePolyline(_Base):
-    points: list[list[float]] = Field(min_length=2)
+    points: list[list[Ft]] = Field(min_length=2)
     closed: bool = False
     layer: str | None = None
 
 
 class CreateRectangle(_Base):
-    x1: float
-    y1: float
-    x2: float
-    y2: float
+    x1: Ft
+    y1: Ft
+    x2: Ft
+    y2: Ft
     layer: str | None = None
 
 
 class CreateArc(_Base):
-    cx: float
-    cy: float
-    radius: float = Field(gt=0)
+    cx: Ft
+    cy: Ft
+    radius: Ft = Field(gt=0)
     start_angle: float
     end_angle: float
     layer: str | None = None
 
 
 class CreateText(_Base):
-    x: float
-    y: float
+    x: Ft
+    y: Ft
     text: str
-    height: float = Field(default=2.5, gt=0)
+    height: Ft = Field(default=2.5, gt=0)
     rotation: float = 0.0
     layer: str | None = None
     align: str | None = None  # e.g. "LEFT" (default), "CENTER", "MIDDLE_CENTER"
 
 
 class CreateMText(_Base):
-    x: float
-    y: float
-    width: float = Field(gt=0)
+    x: Ft
+    y: Ft
+    width: Ft = Field(gt=0)
     text: str
-    height: float = Field(default=2.5, gt=0)
+    height: Ft = Field(default=2.5, gt=0)
     layer: str | None = None
 
 
@@ -112,49 +123,49 @@ class EntityRef(_Base):
 
 class EntityTranslate(_Base):
     entity_id: str
-    dx: float
-    dy: float
+    dx: Ft
+    dy: Ft
 
 
 class EntityRotate(_Base):
     entity_id: str
-    cx: float
-    cy: float
+    cx: Ft
+    cy: Ft
     angle: float
 
 
 class EntityScale(_Base):
     entity_id: str
-    cx: float
-    cy: float
+    cx: Ft
+    cy: Ft
     factor: float = Field(gt=0)
 
 
 class EntityMirror(_Base):
     entity_id: str
-    x1: float
-    y1: float
-    x2: float
-    y2: float
+    x1: Ft
+    y1: Ft
+    x2: Ft
+    y2: Ft
 
 
 class EntityOffset(_Base):
     entity_id: str
-    distance: float
+    distance: Ft
 
 
 class EntityArray(_Base):
     entity_id: str
     rows: int = Field(ge=1)
     cols: int = Field(ge=1)
-    row_dist: float
-    col_dist: float
+    row_dist: Ft
+    col_dist: Ft
 
 
 class EntityFillet(_Base):
     id1: str
     id2: str
-    radius: float = Field(gt=0)
+    radius: Ft = Field(gt=0)
 
 
 class EntityMeasure(_Base):
@@ -188,8 +199,8 @@ class BlockDefine(_Base):
 
 class BlockInsert(_Base):
     name: str
-    x: float
-    y: float
+    x: Ft
+    y: Ft
     scale: float = Field(default=1.0, gt=0)
     rotation: float = 0.0
 
@@ -210,59 +221,59 @@ class BlockUpdateAttrib(_Base):
 
 # ── annotation ─────────────────────────────────────────────────────────
 class DimAligned(_Base):
-    x1: float
-    y1: float
-    x2: float
-    y2: float
-    offset: float
+    x1: Ft
+    y1: Ft
+    x2: Ft
+    y2: Ft
+    offset: Ft
     dim_overrides: dict[str, Any] | None = None
 
 
 class DimLinear(_Base):
-    x1: float
-    y1: float
-    x2: float
-    y2: float
-    dim_x: float
-    dim_y: float
+    x1: Ft
+    y1: Ft
+    x2: Ft
+    y2: Ft
+    dim_x: Ft
+    dim_y: Ft
     dim_overrides: dict[str, Any] | None = None
 
 
 class DimAngular(_Base):
-    cx: float
-    cy: float
-    x1: float
-    y1: float
-    x2: float
-    y2: float
+    cx: Ft
+    cy: Ft
+    x1: Ft
+    y1: Ft
+    x2: Ft
+    y2: Ft
     dim_overrides: dict[str, Any] | None = None
 
 
 class DimRadius(_Base):
-    cx: float
-    cy: float
-    radius: float = Field(gt=0)
+    cx: Ft
+    cy: Ft
+    radius: Ft = Field(gt=0)
     angle: float
     dim_overrides: dict[str, Any] | None = None
 
 
 class Leader(_Base):
-    points: list[list[float]] = Field(min_length=2)
+    points: list[list[Ft]] = Field(min_length=2)
     text: str
 
 
 # ── project ────────────────────────────────────────────────────────────
 class GenerateSitePlan(_Base):
     # Rectangular lot source: both lot_width and lot_depth.
-    lot_width: float | None = Field(default=None, gt=0)
-    lot_depth: float | None = Field(default=None, gt=0)
+    lot_width: Ft | None = Field(default=None, gt=0)
+    lot_depth: Ft | None = Field(default=None, gt=0)
     # Irregular lot source (pick exactly one, instead of lot_width/lot_depth):
     # an explicit ring of [x, y] vertices, or the handle of a boundary already
     # drawn via entity.import_boundary.
-    lot_boundary: list[tuple[float, float]] | None = Field(default=None, min_length=3)
+    lot_boundary: list[tuple[Ft, Ft]] | None = Field(default=None, min_length=3)
     lot_boundary_handle: str | None = None
-    adu_width: float | None = Field(default=None, gt=0)
-    adu_depth: float | None = Field(default=None, gt=0)
+    adu_width: Ft | None = Field(default=None, gt=0)
+    adu_depth: Ft | None = Field(default=None, gt=0)
     adu_position: Literal["rear_center", "rear_left", "rear_right"] = "rear_center"
     draw_name: str | None = None
 
@@ -277,24 +288,24 @@ class GenerateSitePlan(_Base):
 class GenerateRoomPlan(_Base):
     """Interior room floor plan (kitchen, bath, laundry, etc.)."""
 
-    room_width: float = Field(gt=0)
-    room_depth: float = Field(gt=0)
+    room_width: Ft = Field(gt=0)
+    room_depth: Ft = Field(gt=0)
     room_type: Literal["kitchen", "bath", "laundry", "office", "generic"] = "kitchen"
-    island_length: float | None = Field(default=None, gt=0)
-    island_depth: float | None = Field(default=None, gt=0)
+    island_length: Ft | None = Field(default=None, gt=0)
+    island_depth: Ft | None = Field(default=None, gt=0)
     island_orientation: Literal["NS", "EW"] = "NS"
-    island_x: float | None = None
-    island_y: float | None = None
-    cabinet_depth: float = Field(default=2.0, gt=0)
-    north_run_start: float = 1.5
-    north_run_length: float | None = Field(default=None, gt=0)
-    east_run_length: float = Field(default=3.5, ge=0)
+    island_x: Ft | None = None
+    island_y: Ft | None = None
+    cabinet_depth: Ft = Field(default=2.0, gt=0)
+    north_run_start: Ft = 1.5
+    north_run_length: Ft | None = Field(default=None, gt=0)
+    east_run_length: Ft = Field(default=3.5, ge=0)
     include_sink: bool = True
     include_range: bool = True
     include_dishwasher: bool = True
     include_fridge: bool = True
-    sliding_door_start: float | None = 1.8
-    sliding_door_length: float | None = Field(default=6.0, gt=0)
+    sliding_door_start: Ft | None = 1.8
+    sliding_door_length: Ft | None = Field(default=6.0, gt=0)
     title: str = "EXISTING ROOM FLOOR PLAN"
     address: str = "Example Address, City, CA"
     notes: list[str] = []

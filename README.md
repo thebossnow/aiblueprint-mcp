@@ -268,6 +268,23 @@ Every tool operation validates its input against a per-operation schema
 out-of-range values (e.g. a negative radius), and unknown fields are rejected
 with a clear message — `{"ok": false, "error": "Invalid input for entity.create_circle: ..."}` — instead of a raw traceback.
 
+### Lengths: decimal feet or feet-inches
+
+All drawing units are decimal feet. Every length input (coordinates, radii,
+offsets, lot/ADU/room dimensions, `check_height`'s `ridge_y`/`grade_y`) also
+accepts architectural strings, normalized to feet:
+
+| Input | Feet |
+|-------|------|
+| `12.5` / `"12.5"` / `"12 ft"` | 12.5 |
+| `"12'-6\""` / `"12' 6\""` / `"12'6"` | 12.5 |
+| `"5' 6 1/2\""` | 5.5417 |
+| `"66\""` / `"6in"` | 5.5 / 0.5 |
+| `"5 5"` (CAD-style: feet, space, inches) | 5.4167 |
+
+Angles, scales and counts are not lengths and are unaffected. Unparseable
+input is rejected with an example-bearing message.
+
 ## Development
 
 ```bash

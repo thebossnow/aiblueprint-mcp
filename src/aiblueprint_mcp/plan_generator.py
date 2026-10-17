@@ -141,7 +141,7 @@ class SitePlanGenerator:
         target = float((profile.get("project") or {}).get("target_sqft") or 500.0)
         target = min(target, max_sqft)
 
-        adu_w, adu_d = _compute_adu_size(target, cfg, cfg.lot_width, side_sb)
+        adu_w, adu_d = _compute_adu_size(target, cfg, cfg.lot_width, side_sb, max_sqft)
         adu_x = _compute_adu_x(cfg.adu_position, cfg.lot_width, adu_w, side_sb)
         adu_y = cfg.lot_depth - rear_sb - adu_d
 
@@ -153,6 +153,17 @@ class SitePlanGenerator:
         )
 
         buildable_w = cfg.lot_width - 2 * side_sb
+        auto_sized = cfg.adu_width is None or cfg.adu_depth is None
+        # When auto-sizing on a too-narrow lot, the width clamps to the buildable
+        # width and the depth balloons to hit the target area. Catch that here with
+        # a clear "lot too narrow" message instead of a confusing depth error later.
+        if auto_sized and buildable_w < 8.0:
+            raise CommandError(
+                f"Lot too narrow: buildable width {buildable_w:.1f} ft "
+                f"(lot {cfg.lot_width} ft minus {side_sb} ft setbacks each side) "
+                f"cannot fit a reasonable ADU. Widen the lot, reduce setbacks, or "
+                f"pass explicit adu_width/adu_depth."
+            )
         if adu_w > buildable_w:
             raise CommandError(
                 f"ADU width {adu_w:.1f} ft exceeds buildable width "
@@ -163,6 +174,13 @@ class SitePlanGenerator:
             raise CommandError(
                 f"ADU depth {adu_d:.1f} ft + rear setback {rear_sb:.1f} ft "
                 f"exceeds lot depth {cfg.lot_depth:.1f} ft."
+            )
+        # Reject any footprint over the effective max — explicit dims would
+        # otherwise slip past (auto-sizing already clamps to max_sqft).
+        if dims.adu_area > max_sqft + 1e-6:
+            raise CommandError(
+                f"ADU area {dims.adu_area:.0f} sq ft exceeds the maximum allowed "
+                f"{max_sqft:.0f} sq ft for this jurisdiction. Reduce adu_width/adu_depth."
             )
 
         r = await self._b.drawing_create(cfg.draw_name or "site_plan")
@@ -186,6 +204,16 @@ class SitePlanGenerator:
         county = loc.get("county") or ""
         jurisdiction = ", ".join(p for p in [city, county, "CA"] if p)
 
+        # Surface (don't silently allow) an ADU whose front edge falls inside the
+        # front-setback reference band — only possible on shallow lots.
+        plan_warnings = list(profile.get("warnings") or [])
+        if adu_y < front_sb:
+            plan_warnings.append(
+                f"ADU front edge is {adu_y:.1f} ft from the street, inside the "
+                f"{front_sb:.0f} ft front-setback reference. Verify front-setback "
+                f"requirements for ADUs in this jurisdiction."
+            )
+
         return CommandResult(ok=True, payload={
             "handle": handle,
             "drawing_name": cfg.draw_name or "site_plan",
@@ -203,7 +231,7 @@ class SitePlanGenerator:
             "adu_position": cfg.adu_position,
             "jurisdiction": jurisdiction,
             "effective_max_sqft": max_sqft,
-            "warnings": list(profile.get("warnings") or []),
+            "warnings": plan_warnings,
         })
 
     async def _generate_irregular(
@@ -233,7 +261,12 @@ class SitePlanGenerator:
                 "buildable area on this lot shape."
             )
         env_minx, env_miny, env_maxx, env_maxy = adu_envelope.bounds
-        adu_w, adu_d = _compute_adu_size(target, cfg, env_maxx - env_minx, 0.0)
+        adu_w, adu_d = _compute_adu_size(target, cfg, env_maxx - env_minx, 0.0, max_sqft)
+        if adu_w * adu_d > max_sqft + 1e-6:
+            raise CommandError(
+                f"ADU area {adu_w * adu_d:.0f} sq ft exceeds the maximum allowed "
+                f"{max_sqft:.0f} sq ft for this jurisdiction. Reduce adu_width/adu_depth."
+            )
 
         placement = place_adu(adu_envelope, adu_w, adu_d, cfg.adu_position)
         if placement is None:
@@ -610,10 +643,13 @@ def _compute_adu_size(
     cfg: SitePlanConfig,
     lot_width: float,
     side_sb: float,
+    max_sqft: float,
 ) -> tuple[float, float]:
     if cfg.adu_width is not None and cfg.adu_depth is not None:
         return float(cfg.adu_width), float(cfg.adu_depth)
-    # Auto-size: 4:5 aspect ratio (width:depth), rounded to nearest 0.5 ft
+    # Auto-size: 4:5 aspect ratio (width:depth), rounded to nearest 0.5 ft.
+    # Guard against degenerate targets so we never sqrt/divide a non-positive.
+    target_sqft = max(float(target_sqft), 1.0)
     w = math.sqrt(target_sqft * 0.8)
     d = target_sqft / w
     w = round(w * 2) / 2
@@ -621,7 +657,10 @@ def _compute_adu_size(
     max_w = lot_width - 2 * side_sb
     if w > max_w:
         w = max(1.0, max_w)
-        d = math.ceil(target_sqft / w)
+        d = round(math.ceil(target_sqft / w) * 2) / 2
+    # Never let rounding push the footprint over the effective maximum.
+    if w * d > max_sqft and w > 0:
+        d = math.floor(max_sqft / w * 2) / 2
     return w, d
 
 

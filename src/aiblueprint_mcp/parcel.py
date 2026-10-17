@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .units import parse_length
+
 Point = tuple[float, float]
 
 
@@ -46,12 +48,12 @@ def parse_survey_points(points: Any) -> list[Point]:
     for i, p in enumerate(points):
         if isinstance(p, dict):
             try:
-                x, y = float(p["x"]), float(p["y"])
+                x, y = parse_length(p["x"]), parse_length(p["y"])
             except (KeyError, TypeError, ValueError):
                 raise ValueError(f"Point {i} must have numeric 'x' and 'y'.") from None
         elif isinstance(p, (list, tuple)) and len(p) >= 2:
             try:
-                x, y = float(p[0]), float(p[1])
+                x, y = parse_length(p[0]), parse_length(p[1])
             except (TypeError, ValueError):
                 raise ValueError(f"Point {i} must be a numeric [x, y] pair.") from None
         else:

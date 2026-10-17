@@ -106,6 +106,40 @@ async def test_check_setbacks_offsets_inward_regardless_of_boundary_winding(back
         assert envelope_area == pytest.approx(8464.0), f"winding {lot.payload['handle']} offset the wrong way"
 
 
+async def test_check_setbacks_violation_detected(backend):
+    """An ADU intruding into the side-setback zone must FAIL.
+
+    The footprint area (500 sq ft) is far smaller than the buildable envelope,
+    so the old area-only comparison passed it; the containment check catches
+    that it pokes outside the envelope.
+    """
+    profile = _make_profile(side_ft=4, rear_ft=4)
+    engine = ComplianceEngine(backend, profile)
+    lot = await backend.create_rectangle(0, 0, 100, 100)
+    # Left edge at x=1 is inside the 4 ft side setback (envelope starts near x=4).
+    adu = await backend.create_rectangle(1, 10, 21, 35)
+    result = await engine.check_setbacks(lot.payload["handle"], adu.payload["handle"])
+    assert not result.passed
+    assert "OUTSIDE" in result.message
+
+
+async def test_check_setbacks_clockwise_boundary(backend):
+    """Winding-aware offset: a clockwise-wound boundary still offsets inward.
+
+    Without winding detection the envelope would balloon OUTWARD and the
+    setback violation would be missed.
+    """
+    profile = _make_profile(side_ft=4, rear_ft=4)
+    engine = ComplianceEngine(backend, profile)
+    # Clockwise-wound lot (up the left side first → negative signed area).
+    lot = await backend.create_polyline(
+        [(0, 0), (0, 100), (100, 100), (100, 0)], closed=True
+    )
+    adu = await backend.create_rectangle(1, 10, 21, 35)  # intrudes side setback
+    result = await engine.check_setbacks(lot.payload["handle"], adu.payload["handle"])
+    assert not result.passed
+
+
 async def test_check_setbacks_draws_setback_layer(backend):
     profile = _make_profile(side_ft=4, rear_ft=4)
     engine = ComplianceEngine(backend, profile)
@@ -139,6 +173,47 @@ async def test_check_lot_coverage_fails(backend):
     assert "EXCEEDS" in result.message
 
 
+async def test_check_area_no_limit_message_is_clear(backend):
+    """With no max_sqft, the result reports 'no limit checked' rather than 'within None'."""
+    profile = _make_profile(max_sqft=None)
+    engine = ComplianceEngine(backend, profile)
+    r = await backend.create_rectangle(0, 0, 50, 50)
+    result = await engine.check_area(r.payload["handle"])
+    assert result.passed
+    assert "None sq ft limit" not in result.message
+    assert "no max_sqft limit" in result.message
+
+
+async def test_check_lot_coverage_ignores_boundary_handle(backend):
+    """Passing the lot boundary in the structure list must not inflate coverage."""
+    profile = _make_profile(lot_pct=50)
+    engine = ComplianceEngine(backend, profile)
+    lot = await backend.create_rectangle(0, 0, 100, 100)        # 10,000 sq ft
+    structure = await backend.create_rectangle(0, 0, 60, 60)    # 3,600 sq ft = 36%
+    # Include the lot handle itself plus a duplicate structure handle.
+    result = await engine.check_lot_coverage(
+        lot.payload["handle"],
+        [lot.payload["handle"], structure.payload["handle"], structure.payload["handle"]],
+    )
+    assert result.passed
+    assert "36.0%" in result.value
+
+
+async def test_check_lot_coverage_flags_unmeasurable(backend):
+    """A non-area structure (a LINE) is excluded and surfaced in the message."""
+    profile = _make_profile(lot_pct=50)
+    engine = ComplianceEngine(backend, profile)
+    lot = await backend.create_rectangle(0, 0, 100, 100)
+    structure = await backend.create_rectangle(0, 0, 60, 60)
+    line = await backend.create_line(0, 0, 10, 0)  # no area
+    result = await engine.check_lot_coverage(
+        lot.payload["handle"],
+        [structure.payload["handle"], line.payload["handle"]],
+    )
+    assert "36.0%" in result.value
+    assert "could not be measured" in result.message
+
+
 async def test_coverage_against_imported_irregular_boundary(backend):
     """An imported irregular parcel flows through coverage like any boundary."""
     profile = _make_profile(lot_pct=50)
@@ -167,3 +242,19 @@ async def test_full_report_runs_all_checks(backend):
     assert len(report["checks"]) == 3  # area + setbacks + coverage
     assert "passed" in report
     assert "summary" in report
+
+
+async def test_check_setbacks_l_shaped_missing_corner_fails(backend):
+    """An ADU in the notch of an L-shaped lot must fail even though it sits
+    inside the lot's/envelope's bounding box."""
+    profile = _make_profile(side_ft=2, rear_ft=2)
+    engine = ComplianceEngine(backend, profile)
+    lot = await backend.import_boundary(
+        points=[[0, 0], [100, 0], [100, 50], [50, 50], [50, 100], [0, 100]]
+    )
+    adu = await backend.create_rectangle(70, 70, 80, 80)  # in the missing NE corner
+    result = await engine.check_setbacks(lot.payload["handle"], adu.payload["handle"])
+    assert not result.passed
+    inside = await backend.create_rectangle(10, 10, 20, 20)
+    ok = await engine.check_setbacks(lot.payload["handle"], inside.payload["handle"])
+    assert ok.passed

@@ -16,6 +16,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from shapely.geometry import Polygon
+
 from aiblueprint_mcp.parcel import inward_distance
 
 
@@ -62,7 +64,21 @@ class ComplianceEngine:
             return CheckResult("area", False, message="Entity has no area (not a closed polyline).")
 
         # Convert from drawing units to sq ft — assumes 1 drawing unit = 1 ft
-        passed = max_sqft is None or actual <= max_sqft
+        if max_sqft is None:
+            # No limit in the effective rules — report area but don't claim a PASS
+            # against a limit that was never checked.
+            return CheckResult(
+                name="area",
+                passed=True,
+                value=round(actual, 1),
+                limit=None,
+                source=self._sources.get("max_sqft", ""),
+                message=(
+                    f"ADU footprint area {actual:.1f} sq ft — no max_sqft limit in the "
+                    "effective rules, so no area limit was checked. Verify manually."
+                ),
+            )
+        passed = actual <= max_sqft
         return CheckResult(
             name="area",
             passed=passed,
@@ -139,38 +155,57 @@ class ComplianceEngine:
             import structlog
             structlog.get_logger().warning("compliance_setback_layer_assign_failed", error=str(exc))
 
-        # Check if the ADU footprint is inside the envelope using bounding box comparison.
-        # Full polygon-in-polygon is beyond scope here; we measure and compare areas.
+        # Determine pass/fail by actual polygon containment: the whole ADU
+        # footprint must lie inside the buildable envelope polygon (edges
+        # included, within a small tolerance for offset round-off). A bounding
+        # box would pass an ADU sitting in the missing corner of an L-shaped lot,
+        # and the old area-only comparison passed any small ADU anywhere.
         adu_r = await self._b.entity_measure(adu_footprint_handle)
         env_r = await self._b.entity_measure(envelope_handle)
+        adu_area = adu_r.payload.get("area", 0) if adu_r.ok else 0
+        env_area = env_r.payload.get("area", 0) if env_r.ok else 0
 
-        if not adu_r.ok or not env_r.ok:
-            return CheckResult(
-                "setbacks", False,
-                message="Could not measure footprint or envelope area.",
-                annotated_handles=annotated,
-            )
-
-        adu_area = adu_r.payload.get("area", 0)
-        env_area = env_r.payload.get("area", 0)
-
-        passed = adu_area <= env_area
+        adu_pts = self._entity_points(adu_footprint_handle)
+        env_pts = self._entity_points(envelope_handle)
         side_str = f"{side_ft} ft" if side_ft else "N/A"
         rear_str = f"{rear_ft} ft" if rear_ft else "N/A"
+
+        if adu_pts and env_pts:
+            envelope = Polygon(env_pts).buffer(0)
+            passed = envelope.buffer(1e-6).covers(Polygon(adu_pts).buffer(0))
+            detail = (
+                "ADU footprint is fully within the buildable envelope."
+                if passed
+                else "ADU footprint extends OUTSIDE the buildable envelope — setback violation."
+            )
+        else:
+            # Fallback when geometry isn't a readable polyline: area comparison.
+            passed = adu_area <= env_area
+            detail = (
+                f"Area check only: ADU {adu_area:.1f} sq ft "
+                f"{'≤' if passed else '>'} envelope {env_area:.1f} sq ft. "
+                "Verify all four sides meet setback requirements."
+            )
+
         return CheckResult(
             name="setbacks",
             passed=passed,
             value=f"ADU {adu_area:.1f} sq ft, buildable envelope {env_area:.1f} sq ft",
             limit=f"side {side_str}, rear {rear_str}",
             source=self._sources.get("setback_side_ft", ""),
-            message=(
-                f"Setback envelope ({offset_dist} ft uniform offset) drawn. "
-                f"ADU area ({adu_area:.1f} sq ft) {'≤' if passed else '>'} "
-                f"envelope area ({env_area:.1f} sq ft). "
-                "Note: this is a simplified area check; verify all four sides meet setback requirements."
-            ),
+            message=f"Setback envelope ({offset_dist} ft uniform offset) drawn. {detail}",
             annotated_handles=annotated,
         )
+
+    def _entity_points(self, handle: str) -> list[tuple[float, float]] | None:
+        """Return an LWPOLYLINE's 2D vertices, or None if not readable."""
+        try:
+            ent = self._b._doc.entitydb.get(handle)
+            if ent is None or ent.dxftype() != "LWPOLYLINE":
+                return None
+            return [(float(p[0]), float(p[1])) for p in ent.get_points(format="xy")]
+        except Exception:
+            return None
 
     async def check_lot_coverage(
         self, lot_boundary_handle: str, all_structure_handles: list[str]
@@ -182,14 +217,31 @@ class ComplianceEngine:
             return CheckResult("lot_coverage", False, message=f"Cannot measure lot: {lot_r.error}")
         lot_area = lot_r.payload.get("area", 0)
 
+        # De-duplicate handles and never count the lot boundary itself as a
+        # structure — both mistakes would silently distort the coverage figure.
+        seen: set[str] = set()
+        skipped: list[str] = []
         total_covered = 0.0
         for h in all_structure_handles:
+            if h == lot_boundary_handle or h in seen:
+                continue
+            seen.add(h)
             r = await self._b.entity_measure(h)
-            if r.ok and r.payload.get("area"):
-                total_covered += r.payload["area"]
+            area = r.payload.get("area") if r.ok else None
+            if area:
+                total_covered += area
+            else:
+                # A structure we couldn't measure (open polyline, non-area
+                # entity, bad handle) would otherwise silently undercount.
+                skipped.append(h)
 
         pct = (total_covered / lot_area * 100) if lot_area > 0 else 0
         passed = max_pct is None or pct <= max_pct
+        skip_note = (
+            f" {len(skipped)} structure(s) could not be measured and were excluded "
+            f"(coverage may be understated): {', '.join(skipped)}."
+            if skipped else ""
+        )
         return CheckResult(
             name="lot_coverage",
             passed=passed,
@@ -198,7 +250,7 @@ class ComplianceEngine:
             source=self._sources.get("lot_coverage_max_pct", ""),
             message=(
                 f"Total lot coverage {pct:.1f}% of {lot_area:.0f} sq ft lot "
-                f"({'within' if passed else 'EXCEEDS'} {max_pct}% limit)."
+                f"({'within' if passed else 'EXCEEDS'} {max_pct}% limit).{skip_note}"
             ),
         )
 

@@ -168,6 +168,56 @@ async def test_generate_hoa_setback_respected(workspace, backend):
     assert r.payload["rear_setback_ft"] == 6.0
 
 
+async def test_generate_explicit_dims_over_max_rejected(workspace, backend):
+    """Explicit ADU dims exceeding the effective max_sqft are rejected, not drawn."""
+    gen = SitePlanGenerator(backend, _la_session())  # CA state max = 1200 sq ft
+    # 40 × 40 = 1600 sq ft; fits the lot geometrically but violates max_sqft.
+    r = await gen.generate(
+        SitePlanConfig(lot_width=120, lot_depth=160, adu_width=40, adu_depth=40)
+    )
+    assert not r.ok
+    assert "exceeds the maximum" in r.error.lower()
+    assert "1200" in r.error
+
+
+async def test_generate_auto_size_never_exceeds_max(workspace, backend):
+    """Auto-sizing clamps the footprint to the effective max even when target == max."""
+    s = _la_session()
+    s.answer("adu_target_sqft", 1200)  # equal to CA state max
+    gen = SitePlanGenerator(backend, s)
+    r = await gen.generate(SitePlanConfig(lot_width=80, lot_depth=140))
+    assert r.ok, r.error
+    assert r.payload["adu_area_sqft"] <= 1200.0
+
+
+async def test_generate_degenerate_target_does_not_crash(workspace, backend):
+    """A non-positive target sq ft is floored instead of raising sqrt/divide errors."""
+    s = _la_session()
+    s.answer("adu_target_sqft", 0)
+    gen = SitePlanGenerator(backend, s)
+    r = await gen.generate(SitePlanConfig(lot_width=60, lot_depth=120))
+    assert r.ok, r.error
+    assert r.payload["adu_area_sqft"] > 0
+
+
+async def test_generate_auto_size_narrow_lot_clear_error(workspace, backend):
+    """Auto-sizing on a too-narrow lot returns a 'lot too narrow' error, not a depth error."""
+    gen = SitePlanGenerator(backend, _la_session())
+    # 14 ft lot − 8 ft setbacks = 6 ft buildable width.
+    r = await gen.generate(SitePlanConfig(lot_width=14, lot_depth=120))
+    assert not r.ok
+    assert "too narrow" in r.error.lower()
+
+
+async def test_generate_front_setback_overlap_warns(workspace, backend):
+    """A shallow lot that pushes the ADU into the front setback emits a warning (not silence)."""
+    gen = SitePlanGenerator(backend, _la_session())
+    # 40 ft deep: ADU 25 + rear 4 → front edge at y=11, inside the 20 ft front band.
+    r = await gen.generate(SitePlanConfig(lot_width=60, lot_depth=40, adu_width=20, adu_depth=25))
+    assert r.ok, r.error
+    assert any("front-setback" in w for w in r.payload["warnings"])
+
+
 # ── Irregular (non-rectangular) lots — issue #22 ─────────────────────────
 
 # 60x100 rectangle with a 20x40 notch removed from the NE (rear-right) corner.
@@ -357,3 +407,13 @@ async def test_generate_irregular_lot_survives_degenerate_setback_zone(workspace
     gen = SitePlanGenerator(backend, s)
     r = await gen.generate(SitePlanConfig(lot_boundary=L_SHAPED_LOT, adu_width=5, adu_depth=5))
     assert r.ok, r.error
+
+
+async def test_generate_rejects_footprint_barely_over_cap(workspace, backend):
+    """No tolerance above the cap: 30.01 x 40 = 1200.4 sq ft must be rejected."""
+    gen = SitePlanGenerator(backend, _la_session())
+    r = await gen.generate(
+        SitePlanConfig(lot_width=120, lot_depth=160, adu_width=30.01, adu_depth=40)
+    )
+    assert not r.ok
+    assert "exceeds the maximum" in r.error.lower()

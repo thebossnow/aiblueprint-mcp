@@ -147,3 +147,33 @@ def test_merge_sources_tracked():
     layers = [loader.load_state()]
     req = merge_layers(layers, "detached")
     assert "max_sqft" in req.sources or len(req.sources) >= 0  # sources populated
+
+
+def test_merge_coerces_string_numbers():
+    """A rule layer that stores a number as a string still merges correctly.
+
+    Without float coercion this would raise TypeError or rank lexicographically.
+    """
+    state_like = {
+        "name": "STATE",
+        "adu": {"detached": {"max_height_ft": 16, "max_sqft": 1200}},
+    }
+    hoa_stringy = {"max_height_ft": "12"}  # string, more restrictive than 16
+    req = merge_layers([state_like], "detached", hoa_data=hoa_stringy)
+    assert req.rules["max_height_ft"] == 12.0
+
+
+def test_merge_boolean_source_resolves_citation():
+    """Boolean rules attribute to the imposing layer (with citation when present)."""
+    layer = {
+        "name": "TESTCITY",
+        "adu": {
+            "detached": {
+                "parking_required": True,
+                "citations": {"parking_required": "Test Code §1.2.3"},
+            }
+        },
+    }
+    req = merge_layers([layer], "detached")
+    assert req.rules["parking_required"] is True
+    assert req.sources["parking_required"] == "Test Code §1.2.3"

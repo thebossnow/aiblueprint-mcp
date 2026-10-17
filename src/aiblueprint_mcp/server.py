@@ -17,6 +17,7 @@ from mcp.server.fastmcp import FastMCP, Image
 from aiblueprint_mcp.backend import AIBlueprintBackend
 from aiblueprint_mcp.compliance_engine import ComplianceEngine
 from aiblueprint_mcp.project_state import ProjectSession
+from aiblueprint_mcp.units import parse_length
 from aiblueprint_mcp.validation import ValidationError, validate
 
 # structlog defaults to stdout, which would corrupt the MCP JSON-RPC stdio
@@ -113,9 +114,9 @@ async def drawing(operation: str, data: dict | None = None) -> str:
 @mcp.tool()
 async def entity(
     operation: str,
-    x1: float | None = None, y1: float | None = None,
-    x2: float | None = None, y2: float | None = None,
-    points: list[list[float]] | None = None,
+    x1: float | str | None = None, y1: float | str | None = None,
+    x2: float | str | None = None, y2: float | str | None = None,
+    points: list[list[float | str]] | None = None,
     layer: str | None = None,
     entity_id: str | None = None,
     data: dict | None = None,
@@ -129,7 +130,8 @@ async def entity(
     Modify: copy, move, rotate, scale, mirror, offset, array, fillet, erase
 
     Top-level x1/y1/x2/y2/points/layer/entity_id are merged into data; see the
-    README for the per-operation fields.
+    README for the per-operation fields. Lengths are decimal feet, or
+    feet-inches strings such as 12'-6\", 5' 6 1/2\", 66\" or "5 5".
     """
     raw = dict(data or {})
     # Fold top-level convenience params into the data dict when provided.
@@ -453,6 +455,12 @@ async def project(operation: str, data: dict | None = None) -> str:
             d = _check("project", "generate_site_plan", data)
         except ValidationError as ve:
             return _err(f"Invalid input for project.generate_site_plan: {ve}")
+        if not p.resolved_profile().get("has_jurisdiction"):
+            return _err(
+                "No jurisdiction selected. Answer at least the county in the project "
+                "intake before generating a site plan — otherwise the plan would use "
+                "CA state defaults instead of your local rules."
+            )
         from aiblueprint_mcp.plan_generator import SitePlanConfig, SitePlanGenerator
         b = await _get_backend()
         gen = SitePlanGenerator(b, p)
@@ -537,6 +545,13 @@ async def compliance(operation: str, data: dict | None = None) -> str:
     profile = p.resolved_profile()
     if not profile:
         return _err("No project profile. Run project('start') and answer questions first.")
+    if not profile.get("has_jurisdiction"):
+        return _err(
+            "No jurisdiction selected. Answer at least the county in the project intake "
+            "before running geometry compliance checks — results would otherwise be "
+            "measured against CA state defaults, not your local rules. "
+            "Use compliance('requirements') to view the current (state-default) rules."
+        )
 
     engine = ComplianceEngine(b, profile)
 
@@ -569,7 +584,11 @@ async def compliance(operation: str, data: dict | None = None) -> str:
         grade_y = data.get("grade_y")
         if ridge_y is None or grade_y is None:
             return _err("check_height requires data: {elevation_handle?, ridge_y, grade_y}")
-        result = await engine.check_height(eh, float(ridge_y), float(grade_y))
+        try:
+            ridge_ft, grade_ft = parse_length(ridge_y), parse_length(grade_y)
+        except ValueError as ve:
+            return _err(f"Invalid input for compliance.check_height: {ve}")
+        result = await engine.check_height(eh, ridge_ft, grade_ft)
         return _ok(result.to_dict())
 
     elif operation == "report":
