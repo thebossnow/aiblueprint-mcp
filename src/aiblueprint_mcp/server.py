@@ -113,9 +113,9 @@ async def drawing(operation: str, data: dict | None = None) -> str:
 @mcp.tool()
 async def entity(
     operation: str,
-    x1: float | None = None, y1: float | None = None,
-    x2: float | None = None, y2: float | None = None,
-    points: list[list[float]] | None = None,
+    x1: float | str | None = None, y1: float | str | None = None,
+    x2: float | str | None = None, y2: float | str | None = None,
+    points: list[list[float | str]] | None = None,
     layer: str | None = None,
     entity_id: str | None = None,
     data: dict | None = None,
@@ -129,7 +129,8 @@ async def entity(
     Modify: copy, move, rotate, scale, mirror, offset, array, fillet, erase
 
     Top-level x1/y1/x2/y2/points/layer/entity_id are merged into data; see the
-    README for the per-operation fields.
+    README for the per-operation fields. Lengths are decimal feet, or
+    feet-inches strings such as 12'-6\", 5' 6 1/2\", 66\" or "5 5".
     """
     raw = dict(data or {})
     # Fold top-level convenience params into the data dict when provided.

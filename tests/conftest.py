@@ -19,3 +19,16 @@ async def backend(workspace):
     b = AIBlueprintBackend(Config.from_env())
     await b.initialize()
     return b
+
+
+@pytest.fixture(autouse=False)
+async def server_env(workspace, backend):
+    """Wire the server module's global singletons to our test backend."""
+    import aiblueprint_mcp.server as srv
+    original_backend = srv._backend
+    original_project = srv._project
+    srv._backend = backend
+    srv._project = None  # fresh project per test
+    yield srv
+    srv._backend = original_backend
+    srv._project = original_project

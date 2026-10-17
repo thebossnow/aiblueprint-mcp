@@ -14,8 +14,6 @@ from __future__ import annotations
 import base64
 import json
 
-import pytest
-
 from aiblueprint_mcp.compliance_engine import ComplianceEngine
 from aiblueprint_mcp.plan_generator import SitePlanConfig, SitePlanGenerator
 from aiblueprint_mcp.project_state import ProjectSession
@@ -152,19 +150,6 @@ async def test_full_workflow_auto_size(workspace, backend):
 # ═══════════════════════════════════════════════════════════════════════
 # MCP tool dispatch layer tests
 # ═══════════════════════════════════════════════════════════════════════
-
-@pytest.fixture(autouse=False)
-async def server_env(workspace, backend):
-    """Wire the server module's global singletons to our test backend."""
-    import aiblueprint_mcp.server as srv
-    original_backend = srv._backend
-    original_project = srv._project
-    srv._backend = backend
-    srv._project = None  # fresh project per test
-    yield srv
-    srv._backend = original_backend
-    srv._project = original_project
-
 
 async def test_server_drawing_create(server_env):
     """drawing('create') returns JSON with ok=True and a handle."""

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Architectural length input.** Every length field in tool inputs (coordinates,
+  radii, offsets, lot/ADU/room dimensions) now also accepts feet-and-inches
+  strings: `12'-6"`, `5' 6 1/2"`, `66"`, `12 ft`, `6in`, or `"5 5"` (5 ft 5 in).
+  Values are normalized to decimal feet; plain numbers are unchanged. Angles,
+  scales and counts are not affected. See `units.parse_length`.
+
 ### Fixed
 - **`compliance.check_setbacks` offset the buildable envelope outward, not
   inward.** `entity_offset`'s positive/negative distance is only "inward"
