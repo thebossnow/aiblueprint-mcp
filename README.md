@@ -1,5 +1,7 @@
 # AIBlueprint MCP
 
+[![CI](https://github.com/thebossnow/aiblueprint-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/thebossnow/aiblueprint-mcp/actions/workflows/ci.yml)
+
 > MCP server for headless DXF generation via ezdxf + LibreCAD preview — purpose-built for site plans, architectural drafting, and pool bid layouts.
 
 Built on the ezdxf backend architecture from [autocad-mcp](https://github.com/puran-water/autocad-mcp) (MIT), extended with offset, fillet, dimension overrides, solid fills, and LibreCAD integration. No AutoCAD required — runs on Linux, macOS, WSL, or a Chromebook.
@@ -29,7 +31,36 @@ export AIBLUEPRINT_LIBRECAD_BIN=/path/to/librecad
 export AIBLUEPRINT_WORKSPACE=/path/to/workspace
 ```
 
-**Don't have LibreCAD?** The server works without it — you just won't get PNG previews. [Build from source](https://docs.librecad.org/en/latest/appx/build.html) or install via your package manager (`sudo apt install librecad` on Debian/Ubuntu).
+**Don't have LibreCAD?** The server works without it — you just won't get PNG previews. Note that `dxf2png` (the console converter previews depend on) was only added in LibreCAD v2.2.1 — Debian/Ubuntu's packaged `librecad` predates it, so `apt install librecad` alone won't give you working previews. Grab an [official release AppImage](https://github.com/LibreCAD/LibreCAD/releases) (v2.2.1 or later) instead, or use the [Docker image](#docker) below, which bundles a working build.
+
+### Docker
+
+The published image bundles a working LibreCAD build alongside the server, so previews work out of the box with no local LibreCAD install:
+
+```bash
+docker run --rm -i \
+  -v /path/to/workspace:/workspace \
+  ghcr.io/thebossnow/aiblueprint-mcp:latest
+```
+
+MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "aiblueprint-mcp": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-v", "/path/to/workspace:/workspace",
+        "ghcr.io/thebossnow/aiblueprint-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+Mount a host directory at `/workspace` to access generated DXF/PNG files outside the container; omit `-v` to keep everything ephemeral inside the container's filesystem.
 
 ### MCP Client Configuration
 
@@ -62,6 +93,8 @@ Add to your MCP client (Claude Desktop, Hermes, etc.):
 | `save` | Save to path (within workspace) | `{path?}` |
 | `list` | List all open drawings in the session | — |
 | `switch` | Make another open drawing current | `{handle}` |
+| `undo` | Revert the current drawing to the previous checkpoint | — |
+| `redo` | Re-apply the most recently undone checkpoint | — |
 
 Multiple drawings can be open at once. Each `create`/`open` returns a `handle`;
 use `switch` to change which drawing subsequent operations target. File paths
@@ -82,6 +115,7 @@ for `open`/`save` are confined to `AIBLUEPRINT_WORKSPACE` — traversal outside 
 | `create_text` | `data: {x, y, text, height?, rotation?}, layer?` |
 | `create_mtext` | `data: {x, y, width, text, height?}, layer?` |
 | `create_hatch` | `entity_id, data: {pattern?, scale?}` |
+| `import_boundary` | ⭐ Irregular parcel boundary. `data: {points: [[x,y],...]}` **or** `{geojson: {...}}`, `layer?` → returns handle + area/perimeter/bbox |
 
 **Read:** `list` (by layer), `get` (full detail for LINE/CIRCLE/ARC/LWPOLYLINE/TEXT/MTEXT/INSERT/HATCH), `measure` (area / perimeter / length quantity takeoff by entity_id)
 
@@ -135,7 +169,34 @@ Example:
 |-----------|-------------|
 | `preview` | Save DXF + render PNG via LibreCAD `dxf2png` — returns file paths |
 | `screenshot` | Render the drawing via matplotlib and return it as a native MCP image (no LibreCAD needed) |
-| `export` | Write a PNG/PDF/SVG to the workspace. `data: {format?: "pdf"|"png"|"svg", path?}` |
+| `export` | Write a PNG/PDF/SVG raster/vector render, a GeoJSON `FeatureCollection`, or a minimal IFC4 model to the workspace. `data: {format?: "pdf"|"png"|"svg"|"geojson"|"ifc", path?}` |
+
+**IFC export** is intentionally minimal: aiblueprint drawings are flat 2D with no
+height data, so `ifc` only emits a site boundary plus, for each building-footprint
+polygon, an extruded ground slab and perimeter walls at a fixed default height — no
+doors, windows, roofs, or stairs are fabricated. Footprints are picked up by layer
+name (`LOT`/`PARCEL`/`PROPERTY` → site; `FOOTPRINT`/`BUILDING`/`ADU`/`STRUCTURE` →
+building), the same convention `import_boundary` and the site-plan generator already
+use. Requires the optional `ifcopenshell` dependency: `uv sync --extra ifc`.
+
+### `project` — Mezcal bundle export
+
+The `project` tool (see its own docstring for the full intake/jurisdiction
+operation list — `start`/`question`/`answer`/`profile`/`generate_site_plan`/etc.)
+also has an `export_mezcal` operation:
+
+| Operation | Description |
+|-----------|-------------|
+| `export_mezcal` | Write the current drawing's boundary + setback envelope + building footprints — merged with the resolved zoning requirements and a compliance report, when a project profile is available — as one JSON bundle. `data: {path?}` (defaults to `<drawing name>.mezcal.json` in the workspace) |
+
+This is the format the [Pascal editor](https://editor.pascal.app)'s Mezcal
+adapter plugin ([thebossnow/mezcal_adapter_plugin](https://github.com/thebossnow/mezcal_adapter_plugin))
+imports to render a site plan as a native 3D/floor-plan scene node. Same
+footprint-classification convention as the IFC export above; requires a
+closed boundary polyline (draw one or `entity.import_boundary` first).
+`requirements`/`compliance` are only included once `project.answer` has
+resolved at least one real jurisdiction rule — an empty/unresolved profile
+is omitted rather than reported as a false "pass".
 
 ## Hatch Patterns
 
@@ -211,11 +272,23 @@ with a clear message — `{"ok": false, "error": "Invalid input for entity.creat
 
 ```bash
 uv sync --extra dev      # install dev dependencies (pytest, ruff)
-uv run pytest -q         # run the test suite
+uv run pytest -q         # run the test suite (134 tests)
 uv run ruff check src tests
 ```
 
 CI runs lint + tests on Python 3.10–3.12 via GitHub Actions (`.github/workflows/ci.yml`).
+
+See [CHANGELOG.md](CHANGELOG.md) for release history and [RELEASING.md](RELEASING.md) for how releases are cut.
+
+## Roadmap / Known Limitations
+
+Tracked in the [issue tracker](https://github.com/thebossnow/aiblueprint-mcp/issues) — contributions welcome:
+
+- Docker image bundling LibreCAD ([#9](https://github.com/thebossnow/aiblueprint-mcp/issues/9))
+- Coverage reporting in CI ([#10](https://github.com/thebossnow/aiblueprint-mcp/issues/10))
+- PyPI publication, versioned releases, changelog ([#11](https://github.com/thebossnow/aiblueprint-mcp/issues/11))
+- Jurisdiction data beyond California ([#12](https://github.com/thebossnow/aiblueprint-mcp/issues/12))
+- Live LibreCAD backend via bivex's TCP bridge ([#1](https://github.com/thebossnow/aiblueprint-mcp/issues/1))
 
 ## License
 

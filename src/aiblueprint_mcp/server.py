@@ -9,6 +9,7 @@ then dispatches to operation-specific backend methods.
 from __future__ import annotations
 
 import json
+import sys
 
 import structlog
 from mcp.server.fastmcp import FastMCP, Image
@@ -17,6 +18,10 @@ from aiblueprint_mcp.backend import AIBlueprintBackend
 from aiblueprint_mcp.compliance_engine import ComplianceEngine
 from aiblueprint_mcp.project_state import ProjectSession
 from aiblueprint_mcp.validation import ValidationError, validate
+
+# structlog defaults to stdout, which would corrupt the MCP JSON-RPC stdio
+# stream — every log record must go to stderr instead.
+structlog.configure(logger_factory=structlog.PrintLoggerFactory(file=sys.stderr))
 
 log = structlog.get_logger()
 mcp = FastMCP("aiblueprint-mcp")
@@ -70,6 +75,8 @@ async def drawing(operation: str, data: dict | None = None) -> str:
       save   — Save to path (within workspace). data: {path?}
       list   — List all open drawings in the session.
       switch — Make another open drawing current. data: {handle}
+      undo   — Revert the current drawing to the previous checkpoint.
+      redo   — Re-apply the most recently undone checkpoint.
     """
     data = data or {}
     b = await _get_backend()
@@ -90,6 +97,10 @@ async def drawing(operation: str, data: dict | None = None) -> str:
         r = await b.drawing_list()
     elif operation == "switch":
         r = await b.drawing_switch(data["handle"])
+    elif operation == "undo":
+        r = await b.undo()
+    elif operation == "redo":
+        r = await b.redo()
     else:
         return _err(f"Unknown drawing operation: {operation}")
     return _result(r)
@@ -112,7 +123,8 @@ async def entity(
     """Entity creation, querying, and modification.
 
     Create: create_line, create_circle, create_polyline, create_rectangle,
-            create_arc, create_text, create_mtext, create_hatch
+            create_arc, create_text, create_mtext, create_hatch,
+            import_boundary (irregular parcel from survey points or GeoJSON)
     Read:   list, get, measure (area/perimeter/length takeoff)
     Modify: copy, move, rotate, scale, mirror, offset, array, fillet, erase
 
@@ -136,6 +148,7 @@ async def entity(
         "create_circle": lambda: b.create_circle(d["cx"], d["cy"], d["radius"], d.get("layer")),
         "create_polyline": lambda: b.create_polyline(d["points"], d.get("closed", False), d.get("layer")),
         "create_rectangle": lambda: b.create_rectangle(d["x1"], d["y1"], d["x2"], d["y2"], d.get("layer")),
+        "import_boundary": lambda: b.import_boundary(d.get("points"), d.get("geojson"), d.get("layer", "LOT-LINE")),
         "create_arc": lambda: b.create_arc(d["cx"], d["cy"], d["radius"], d["start_angle"], d["end_angle"], d.get("layer")),
         "create_text": lambda: b.create_text(d["x"], d["y"], d["text"], d.get("height", 2.5), d.get("rotation", 0.0), d.get("layer"), d.get("align")),
         "create_mtext": lambda: b.create_mtext(d["x"], d["y"], d["width"], d["text"], d.get("height", 2.5), d.get("layer")),
@@ -299,7 +312,7 @@ async def view(operation: str, data: dict | None = None):
     Operations:
       screenshot   — Render current drawing as a PNG image (matplotlib).
       preview      — Save DXF + render PNG via LibreCAD. Returns file paths.
-      export       — Write PNG/PDF/SVG to the workspace. data: {format?, path?}
+      export       — Write PNG/PDF/SVG/GeoJSON to the workspace. data: {format?, path?}
     """
     data = data or {}
     b = await _get_backend()
@@ -313,7 +326,11 @@ async def view(operation: str, data: dict | None = None):
     elif operation == "preview":
         r = await b.preview()
     elif operation == "export":
-        r = await b.export(data.get("format", "pdf"), data.get("path"))
+        try:
+            d = _check("view", operation, data)
+        except ValidationError as ve:
+            return _err(f"Invalid input for view.{operation}: {ve}")
+        r = await b.export(d.get("format", "pdf"), d.get("path"))
     else:
         return _err(f"Unknown view operation: {operation}")
     return _result(r)
@@ -350,9 +367,27 @@ async def project(operation: str, data: dict | None = None) -> str:
       counties          — List all CA counties in the database.
       cities            — List all CA cities in the database.
       generate_site_plan — Generate a code-compliant DXF site plan from the
-                           resolved profile. data: {lot_width, lot_depth,
-                           adu_width?, adu_depth?, adu_position?, draw_name?}
+                           resolved profile. Provide exactly one lot source:
+                           {lot_width, lot_depth} for a rectangular lot, or
+                           {lot_boundary: [[x,y],...]} / {lot_boundary_handle}
+                           (from entity.import_boundary) for an irregular
+                           (e.g. L-shaped, trapezoidal) lot. Plus optional
+                           adu_width?, adu_depth?, adu_position?, draw_name?
                            Returns drawing handle + layout summary.
+      generate_room_plan — Generate a dimensioned interior room floor plan
+                           (kitchen, bath, laundry, office, generic) as DXF.
+                           data: {room_width, room_depth, room_type?,
+                           island_length?, island_depth?, island_orientation?,
+                           ...} Returns drawing handle + layout summary.
+      export_mezcal — Export the current drawing's boundary, setback
+                      envelope, and building footprints — merged with the
+                      resolved zoning requirements and a compliance report
+                      when a project profile is available — as one JSON
+                      bundle for the Pascal editor's Mezcal adapter plugin
+                      (thebossnow/mezcal_adapter_plugin). data: {path?}
+                      (defaults to "<drawing name>.mezcal.json" in the
+                      workspace). Requires a closed boundary polyline —
+                      draw one or use entity.import_boundary first.
     """
     data = data or {}
     p = _get_project()
@@ -428,6 +463,24 @@ async def project(operation: str, data: dict | None = None) -> str:
         b = await _get_backend()
         gen = SitePlanGenerator(b, p)
         r = await gen.generate(SitePlanConfig(**d))
+        return _result(r)
+
+    elif operation == "generate_room_plan":
+        try:
+            d = _check("project", "generate_room_plan", data)
+        except ValidationError as ve:
+            return _err(f"Invalid input for project.generate_room_plan: {ve}")
+        from aiblueprint_mcp.room_plan_generator import RoomFloorPlanConfig, RoomFloorPlanGenerator
+        b = await _get_backend()
+        gen = RoomFloorPlanGenerator(b)
+        r = await gen.generate(RoomFloorPlanConfig(**d))
+        return _result(r)
+
+    elif operation == "export_mezcal":
+        from aiblueprint_mcp.mezcal_export import export_mezcal
+
+        b = await _get_backend()
+        r = await export_mezcal(b, p.resolved_profile(), data.get("path"))
         return _result(r)
 
     else:

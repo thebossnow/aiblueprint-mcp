@@ -55,3 +55,18 @@ async def test_export_via_view_tool(workspace):
     await server.entity("create_rectangle", x1=0, y1=0, x2=4, y2=4)
     out = json.loads(await server.view("export", {"format": "svg"}))
     assert out["ok"] and out["format"] == "svg"
+
+
+async def test_undo_redo_via_drawing_tool():
+    await server.drawing("create", {"name": "s"})
+    await server.entity("create_line", x1=0, y1=0, x2=5, y2=5)
+    undone = json.loads(await server.drawing("undo"))
+    assert undone["ok"] and undone["entity_count"] == 0
+    redone = json.loads(await server.drawing("redo"))
+    assert redone["ok"] and redone["entity_count"] == 1
+
+
+async def test_undo_with_nothing_to_undo_is_friendly():
+    await server.drawing("create", {"name": "s"})
+    out = json.loads(await server.drawing("undo"))
+    assert not out["ok"] and "Nothing to undo" in out["error"]

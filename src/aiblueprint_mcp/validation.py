@@ -4,7 +4,7 @@ Each tool operation that takes structured input has a Pydantic model here.
 ``validate(operation, data)`` returns a validated dict (with defaults applied)
 or raises ``ValidationError`` with a clear, LLM-readable message.
 
-This keeps the 6-tool consolidated surface while giving every operation a real
+This keeps the 8-tool consolidated surface while giving every operation a real
 schema and friendly errors instead of raw ``KeyError``s.
 """
 
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 __all__ = ["validate", "ValidationError"]
 
@@ -253,12 +253,64 @@ class Leader(_Base):
 
 # ── project ────────────────────────────────────────────────────────────
 class GenerateSitePlan(_Base):
-    lot_width: float = Field(gt=0)
-    lot_depth: float = Field(gt=0)
+    # Rectangular lot source: both lot_width and lot_depth.
+    lot_width: float | None = Field(default=None, gt=0)
+    lot_depth: float | None = Field(default=None, gt=0)
+    # Irregular lot source (pick exactly one, instead of lot_width/lot_depth):
+    # an explicit ring of [x, y] vertices, or the handle of a boundary already
+    # drawn via entity.import_boundary.
+    lot_boundary: list[tuple[float, float]] | None = Field(default=None, min_length=3)
+    lot_boundary_handle: str | None = None
     adu_width: float | None = Field(default=None, gt=0)
     adu_depth: float | None = Field(default=None, gt=0)
     adu_position: Literal["rear_center", "rear_left", "rear_right"] = "rear_center"
     draw_name: str | None = None
+
+    @model_validator(mode="after")
+    def _check_one_lot_source(self) -> GenerateSitePlan:
+        from .plan_generator import validate_lot_source
+
+        validate_lot_source(self.lot_width, self.lot_depth, self.lot_boundary, self.lot_boundary_handle)
+        return self
+
+
+class GenerateRoomPlan(_Base):
+    """Interior room floor plan (kitchen, bath, laundry, etc.)."""
+
+    room_width: float = Field(gt=0)
+    room_depth: float = Field(gt=0)
+    room_type: Literal["kitchen", "bath", "laundry", "office", "generic"] = "kitchen"
+    island_length: float | None = Field(default=None, gt=0)
+    island_depth: float | None = Field(default=None, gt=0)
+    island_orientation: Literal["NS", "EW"] = "NS"
+    island_x: float | None = None
+    island_y: float | None = None
+    cabinet_depth: float = Field(default=2.0, gt=0)
+    north_run_start: float = 1.5
+    north_run_length: float | None = Field(default=None, gt=0)
+    east_run_length: float = Field(default=3.5, ge=0)
+    include_sink: bool = True
+    include_range: bool = True
+    include_dishwasher: bool = True
+    include_fridge: bool = True
+    sliding_door_start: float | None = 1.8
+    sliding_door_length: float | None = Field(default=6.0, gt=0)
+    title: str = "EXISTING ROOM FLOOR PLAN"
+    address: str = "Example Address, City, CA"
+    notes: list[str] = []
+    draw_name: str | None = None
+
+
+class ImportBoundary(_Base):
+    points: list[Any] | None = None
+    geojson: dict[str, Any] | None = None
+    layer: str | None = "LOT-LINE"
+
+
+# ── view ───────────────────────────────────────────────────────────────
+class ViewExport(_Base):
+    format: Literal["pdf", "png", "svg", "geojson", "ifc"] = "pdf"
+    path: str | None = None
 
 
 # ── registry ───────────────────────────────────────────────────────────
@@ -273,6 +325,7 @@ _MODELS: dict[str, type[_Base]] = {
     "entity.create_circle": CreateCircle,
     "entity.create_polyline": CreatePolyline,
     "entity.create_rectangle": CreateRectangle,
+    "entity.import_boundary": ImportBoundary,
     "entity.create_arc": CreateArc,
     "entity.create_text": CreateText,
     "entity.create_mtext": CreateMText,
@@ -305,6 +358,9 @@ _MODELS: dict[str, type[_Base]] = {
     "block.update_attribute": BlockUpdateAttrib,
     # project
     "project.generate_site_plan": GenerateSitePlan,
+    "project.generate_room_plan": GenerateRoomPlan,
+    # view
+    "view.export": ViewExport,
     # annotation
     "annotation.create_text": CreateText,
     "annotation.create_dimension_aligned": DimAligned,

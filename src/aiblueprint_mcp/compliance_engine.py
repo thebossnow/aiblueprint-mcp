@@ -16,6 +16,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from aiblueprint_mcp.parcel import inward_distance
+
 
 @dataclass
 class CheckResult:
@@ -114,15 +116,20 @@ class ComplianceEngine:
         )
 
         # Create the buildable envelope by offsetting the property boundary inward.
-        # The offset helper moves to the LEFT of each directed edge — which is the
-        # polygon interior for CCW winding — so the inward direction depends on
-        # winding: positive distance for CCW, negative for CW. Detect winding from
-        # the signed area so a clockwise boundary doesn't silently offset OUTWARD
-        # (which would make every ADU pass).
-        boundary_pts = self._entity_points(property_boundary_handle)
-        ccw = _signed_area(boundary_pts) > 0 if boundary_pts else True
-        inward = offset_dist if ccw else -offset_dist
-        envelope_r = await self._b.entity_offset(property_boundary_handle, inward)
+        # entity_offset's positive/negative distance is only "inward" for a
+        # CCW-wound polyline (see backend.py's _offset_polyline docstring);
+        # nothing guarantees the boundary's winding (create_rectangle is
+        # always CCW, but import_boundary/GeoJSON boundaries can be either —
+        # see parcel.py's ring_signed_area/inward_distance), so compute the
+        # correct sign from the boundary's actual points rather than assume it.
+        boundary_r = await self._b.entity_get(property_boundary_handle)
+        if not boundary_r.ok or not boundary_r.payload.get("points"):
+            return CheckResult(
+                "setbacks", False,
+                message=f"Could not read property boundary geometry: {boundary_r.error or 'no points'}",
+            )
+        signed_offset = inward_distance(boundary_r.payload["points"], offset_dist)
+        envelope_r = await self._b.entity_offset(property_boundary_handle, signed_offset)
         if not envelope_r.ok:
             return CheckResult(
                 "setbacks", False,
@@ -306,19 +313,6 @@ class ComplianceEngine:
 
 
 # ── Geometry helpers ───────────────────────────────────────────────────
-
-def _signed_area(pts: list[tuple[float, float]]) -> float:
-    """Shoelace signed area; positive = counter-clockwise winding."""
-    n = len(pts)
-    if n < 3:
-        return 0.0
-    s = 0.0
-    for i in range(n):
-        x1, y1 = pts[i]
-        x2, y2 = pts[(i + 1) % n]
-        s += x1 * y2 - x2 * y1
-    return s / 2.0
-
 
 def _bbox(pts: list[tuple[float, float]]) -> tuple[float, float, float, float]:
     """Return (xmin, ymin, xmax, ymax) for a list of 2D points."""
