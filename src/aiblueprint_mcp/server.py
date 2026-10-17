@@ -17,6 +17,7 @@ from mcp.server.fastmcp import FastMCP, Image
 from aiblueprint_mcp.backend import AIBlueprintBackend
 from aiblueprint_mcp.compliance_engine import ComplianceEngine
 from aiblueprint_mcp.project_state import ProjectSession
+from aiblueprint_mcp.units import parse_length
 from aiblueprint_mcp.validation import ValidationError, validate
 
 # structlog defaults to stdout, which would corrupt the MCP JSON-RPC stdio
@@ -583,7 +584,11 @@ async def compliance(operation: str, data: dict | None = None) -> str:
         grade_y = data.get("grade_y")
         if ridge_y is None or grade_y is None:
             return _err("check_height requires data: {elevation_handle?, ridge_y, grade_y}")
-        result = await engine.check_height(eh, float(ridge_y), float(grade_y))
+        try:
+            ridge_ft, grade_ft = parse_length(ridge_y), parse_length(grade_y)
+        except ValueError as ve:
+            return _err(f"Invalid input for compliance.check_height: {ve}")
+        result = await engine.check_height(eh, ridge_ft, grade_ft)
         return _ok(result.to_dict())
 
     elif operation == "report":

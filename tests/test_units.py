@@ -70,3 +70,20 @@ async def test_server_accepts_architectural_lengths(server_env):
     assert r["ok"] is True
     m = json.loads(await srv.entity(operation="measure", entity_id=r["handle"]))
     assert m["area"] == pytest.approx(20 * 10.5)
+
+
+async def test_check_height_accepts_architectural_lengths(server_env):
+    srv = server_env
+    await srv.project(operation="start")
+    for qid, val in [("project_type", "ADU — Detached"), ("county", "San Diego"),
+                     ("city", "Encinitas")]:
+        await srv.project(operation="answer", data={"question_id": qid, "value": val})
+    r = json.loads(await srv.compliance(
+        operation="check_height", data={"ridge_y": "15'-6\"", "grade_y": "0"},
+    ))
+    assert r["ok"] is True
+    assert r["value"] == pytest.approx(15.5)
+    bad = json.loads(await srv.compliance(
+        operation="check_height", data={"ridge_y": "tall", "grade_y": 0},
+    ))
+    assert bad["ok"] is False

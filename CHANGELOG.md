@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Architectural length input.** Every length field in tool inputs (coordinates,
   radii, offsets, lot/ADU/room dimensions) now also accepts feet-and-inches
-  strings: `12'-6"`, `5' 6 1/2"`, `66"`, `12 ft`, `6in`, or `"5 5"` (5 ft 5 in).
+  strings: `12'-6"`, `5' 6 1/2"`, `66"`, `12 ft`, `6in`, or `"5 5"` (5 ft 5 in), including `compliance.check_height`'s `ridge_y`/`grade_y`.
   Values are normalized to decimal feet; plain numbers are unchanged. Angles,
   scales and counts are not affected. See `units.parse_length`.
 
