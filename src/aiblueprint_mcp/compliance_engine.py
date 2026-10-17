@@ -307,12 +307,3 @@ class ComplianceEngine:
             "notes": self._profile.get("notes", []),
             "disclaimers": self._profile.get("disclaimers", []),
         }
-
-
-# ── Geometry helpers ───────────────────────────────────────────────────
-
-def _bbox(pts: list[tuple[float, float]]) -> tuple[float, float, float, float]:
-    """Return (xmin, ymin, xmax, ymax) for a list of 2D points."""
-    xs = [p[0] for p in pts]
-    ys = [p[1] for p in pts]
-    return min(xs), min(ys), max(xs), max(ys)
