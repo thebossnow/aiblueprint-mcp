@@ -16,9 +16,34 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from shapely.geometry import Polygon
+from shapely.geometry import MultiPolygon, Polygon
+from shapely.geometry.polygon import orient
+from shapely.ops import unary_union
 
-from aiblueprint_mcp.parcel import inward_distance
+# Pieces of buildable area smaller than this (sq ft) are numerical slivers
+# left by the buffer, not usable land.
+_MIN_PIECE_AREA = 1e-6
+
+
+def _buildable_pieces(lot: Polygon, setback_ft: float) -> list[Polygon]:
+    """Shrink ``lot`` inward by ``setback_ft`` and return the buildable pieces.
+
+    Uses a negative buffer with mitre joins, so square lot corners stay
+    square (a 100x100 lot with a 4 ft setback becomes exactly 92x92). The
+    result can be empty (lot too narrow) or split into several pieces (a
+    necked lot); pieces are returned largest first, slivers dropped.
+    """
+    shrunk = lot.buffer(-float(setback_ft), join_style="mitre")
+    if shrunk.is_empty:
+        return []
+    if isinstance(shrunk, Polygon):
+        geoms = [shrunk]
+    elif isinstance(shrunk, MultiPolygon):
+        geoms = list(shrunk.geoms)
+    else:  # GeometryCollection or similar — keep only areal parts
+        geoms = [g for g in getattr(shrunk, "geoms", []) if isinstance(g, Polygon)]
+    pieces = [g for g in geoms if g.is_valid and g.area > _MIN_PIECE_AREA]
+    return sorted(pieces, key=lambda g: g.area, reverse=True)
 
 
 @dataclass
@@ -117,73 +142,102 @@ class ComplianceEngine:
             v for v in [side_ft, rear_ft] if v is not None
         )
 
-        # Create the buildable envelope by offsetting the property boundary inward.
-        # entity_offset's positive/negative distance is only "inward" for a
-        # CCW-wound polyline (see backend.py's _offset_polyline docstring);
-        # nothing guarantees the boundary's winding (create_rectangle is
-        # always CCW, but import_boundary/GeoJSON boundaries can be either —
-        # see parcel.py's ring_signed_area/inward_distance), so compute the
-        # correct sign from the boundary's actual points rather than assume it.
+        # Build the buildable envelope by shrinking the whole lot polygon
+        # inward with a negative buffer (mitre joins keep rectangular corners
+        # square). The previous approach moved each lot edge straight inward
+        # (entity_offset); on narrow lots and necked/flag lots those offset
+        # edges cross each other, and buffer(0) "repaired" the resulting
+        # self-intersecting ring into a plausible-looking polygon, so the
+        # check could pass or fail wrongly. A negative buffer is also
+        # winding-independent, so CW and CCW boundaries behave the same.
         boundary_r = await self._b.entity_get(property_boundary_handle)
         if not boundary_r.ok or not boundary_r.payload.get("points"):
             return CheckResult(
                 "setbacks", False,
                 message=f"Could not read property boundary geometry: {boundary_r.error or 'no points'}",
             )
-        signed_offset = inward_distance(boundary_r.payload["points"], offset_dist)
-        envelope_r = await self._b.entity_offset(property_boundary_handle, signed_offset)
-        if not envelope_r.ok:
+        side_str = f"{side_ft} ft" if side_ft else "N/A"
+        rear_str = f"{rear_ft} ft" if rear_ft else "N/A"
+        limit_str = f"side {side_str}, rear {rear_str}"
+        source = self._sources.get("setback_side_ft", "")
+
+        boundary_pts = [(float(p[0]), float(p[1])) for p in boundary_r.payload["points"]]
+        lot = Polygon(boundary_pts) if len(boundary_pts) >= 3 else Polygon()
+        if lot.is_empty or not lot.is_valid or lot.area <= 0:
             return CheckResult(
                 "setbacks", False,
-                message=f"Could not compute setback envelope: {envelope_r.error}",
+                limit=limit_str,
+                source=source,
+                message=(
+                    "Property boundary is not a valid closed polygon "
+                    "(too few points, zero area, or edges that cross) — "
+                    "cannot compute a setback envelope."
+                ),
             )
-        envelope_handle = envelope_r.payload["handle"]
-        annotated.append(envelope_handle)
 
-        # Style the setback envelope as a dashed red layer.
+        pieces = _buildable_pieces(lot, offset_dist)
+        if not pieces:
+            return CheckResult(
+                name="setbacks",
+                passed=False,
+                value="ADU footprint, buildable envelope 0.0 sq ft",
+                limit=limit_str,
+                source=source,
+                message=(
+                    f"No buildable area: a {offset_dist} ft setback from every lot line "
+                    "leaves nothing of this lot to build on (the lot is too narrow). "
+                    "Setback violation."
+                ),
+            )
+
+        # Draw one dashed red setback outline per buildable piece (largest
+        # first, so annotated_handles[0] stays the main envelope).
         # Ensure the SITE_DASH linetype exists (plan_generator may or may not have run).
         doc = self._b._doc
         if "SITE_DASH" not in doc.linetypes:
             ltype = doc.linetypes.new("SITE_DASH")
             ltype.setup_pattern("A,4,-2", length=6.0)
         await self._b.layer_create("SETBACK-LINE", color="red", linetype="SITE_DASH")
-        try:
-            ent = doc.entitydb.get(envelope_handle)
-            if ent:
-                ent.dxf.layer = "SETBACK-LINE"
-        except Exception as exc:
-            import structlog
-            structlog.get_logger().warning("compliance_setback_layer_assign_failed", error=str(exc))
+        for piece in pieces:
+            ring = list(orient(piece, sign=1.0).exterior.coords)[:-1]
+            drawn = await self._b.create_polyline(ring, closed=True, layer="SETBACK-LINE")
+            if drawn.ok:
+                annotated.append(drawn.payload["handle"])
 
         # Determine pass/fail by actual polygon containment: the whole ADU
-        # footprint must lie inside the buildable envelope polygon (edges
-        # included, within a small tolerance for offset round-off). A bounding
-        # box would pass an ADU sitting in the missing corner of an L-shaped lot,
-        # and the old area-only comparison passed any small ADU anywhere.
+        # footprint must lie inside ONE buildable piece (edges included,
+        # within a small tolerance for round-off). A necked lot can split
+        # into separate pieces, and a footprint bridging them across the
+        # unbuildable neck is a violation. A bounding box would pass an ADU
+        # sitting in the missing corner of an L-shaped lot, and the old
+        # area-only comparison passed any small ADU anywhere.
         adu_r = await self._b.entity_measure(adu_footprint_handle)
-        env_r = await self._b.entity_measure(envelope_handle)
         adu_area = adu_r.payload.get("area", 0) if adu_r.ok else 0
-        env_area = env_r.payload.get("area", 0) if env_r.ok else 0
+        env_area = sum(piece.area for piece in pieces)
 
         adu_pts = self._entity_points(adu_footprint_handle)
-        env_pts = self._entity_points(envelope_handle)
-        side_str = f"{side_ft} ft" if side_ft else "N/A"
-        rear_str = f"{rear_ft} ft" if rear_ft else "N/A"
+        adu_poly = Polygon(adu_pts).buffer(0) if adu_pts and len(adu_pts) >= 3 else None
 
-        if adu_pts and env_pts:
-            envelope = Polygon(env_pts).buffer(0)
-            passed = envelope.buffer(1e-6).covers(Polygon(adu_pts).buffer(0))
-            detail = (
-                "ADU footprint is fully within the buildable envelope."
-                if passed
-                else "ADU footprint extends OUTSIDE the buildable envelope — setback violation."
-            )
+        if adu_poly is not None and not adu_poly.is_empty:
+            passed = any(piece.buffer(1e-6).covers(adu_poly) for piece in pieces)
+            if passed:
+                detail = "ADU footprint is fully within the buildable envelope."
+            elif len(pieces) > 1 and unary_union(pieces).buffer(1e-6).intersects(adu_poly):
+                detail = (
+                    f"The setbacks split this lot into {len(pieces)} separate buildable areas, "
+                    "and the ADU footprint does not fit inside any single one of them — "
+                    "setback violation."
+                )
+            else:
+                detail = "ADU footprint extends OUTSIDE the buildable envelope — setback violation."
         else:
-            # Fallback when geometry isn't a readable polyline: area comparison.
-            passed = adu_area <= env_area
+            # Fallback when geometry isn't a readable polyline: area comparison
+            # against the largest buildable piece.
+            largest = pieces[0].area
+            passed = adu_area <= largest
             detail = (
                 f"Area check only: ADU {adu_area:.1f} sq ft "
-                f"{'≤' if passed else '>'} envelope {env_area:.1f} sq ft. "
+                f"{'≤' if passed else '>'} envelope {largest:.1f} sq ft. "
                 "Verify all four sides meet setback requirements."
             )
 
@@ -191,8 +245,8 @@ class ComplianceEngine:
             name="setbacks",
             passed=passed,
             value=f"ADU {adu_area:.1f} sq ft, buildable envelope {env_area:.1f} sq ft",
-            limit=f"side {side_str}, rear {rear_str}",
-            source=self._sources.get("setback_side_ft", ""),
+            limit=limit_str,
+            source=source,
             message=f"Setback envelope ({offset_dist} ft uniform offset) drawn. {detail}",
             annotated_handles=annotated,
         )

@@ -258,3 +258,88 @@ async def test_check_setbacks_l_shaped_missing_corner_fails(backend):
     inside = await backend.create_rectangle(10, 10, 20, 20)
     ok = await engine.check_setbacks(lot.payload["handle"], inside.payload["handle"])
     assert ok.passed
+
+
+# ── Setback envelope geometry (negative buffer) ───────────────────────────
+# The envelope used to be built by moving each lot edge straight inward
+# (entity_offset). On narrow lots and necked/flag lots those offset edges
+# cross, and buffer(0) then "repairs" the self-intersecting ring into a
+# plausible-looking polygon, so the check could pass or fail wrongly.
+
+
+async def test_check_setbacks_rectangle_envelope_unchanged(backend):
+    """A plain rectangle gets exactly the same 92x92 envelope as before."""
+    profile = _make_profile(side_ft=4, rear_ft=4)
+    engine = ComplianceEngine(backend, profile)
+    lot = await backend.create_rectangle(0, 0, 100, 100)
+    adu = await backend.create_rectangle(4, 4, 24, 29)  # touches the setback line
+    result = await engine.check_setbacks(lot.payload["handle"], adu.payload["handle"])
+    assert result.passed
+    assert len(result.annotated_handles) == 1
+    env = backend._doc.entitydb.get(result.annotated_handles[0])
+    assert env.dxf.layer == "SETBACK-LINE"
+    pts = sorted((round(x, 6), round(y, 6)) for x, y in env.get_points(format="xy"))
+    assert pts == [(4, 4), (4, 96), (96, 4), (96, 96)]  # square (mitre) corners
+
+
+async def test_check_setbacks_narrow_lot_no_buildable_area_fails(backend):
+    """A 6 ft wide lot with 4 ft side setbacks has no buildable area at all.
+
+    Edge-offsetting flipped this into an inverted 2 ft strip that buffer(0)
+    accepted as valid, so a skinny footprint inside it falsely passed.
+    """
+    profile = _make_profile(side_ft=4, rear_ft=4)
+    engine = ComplianceEngine(backend, profile)
+    lot = await backend.create_rectangle(0, 0, 6, 100)
+    adu = await backend.create_rectangle(2.5, 10, 3.5, 20)
+    result = await engine.check_setbacks(lot.payload["handle"], adu.payload["handle"])
+    assert not result.passed
+    assert "no buildable area" in result.message.lower()
+    assert result.annotated_handles == []
+
+
+async def test_check_setbacks_flag_lot_neck_is_not_buildable(backend):
+    """Flag lot: a 6 ft access neck below a 60x60 body.
+
+    With 4 ft setbacks the neck is fully consumed, so the buildable area is
+    just the body shrunk to 52x52, and a footprint in the neck must fail.
+    """
+    profile = _make_profile(side_ft=4, rear_ft=4)
+    engine = ComplianceEngine(backend, profile)
+    lot = await backend.import_boundary(
+        points=[[0, 0], [6, 0], [6, 40], [60, 40], [60, 100], [0, 100], [0, 40]]
+    )
+    in_neck = await backend.create_rectangle(2.5, 5, 3.5, 35)
+    result = await engine.check_setbacks(lot.payload["handle"], in_neck.payload["handle"])
+    assert not result.passed
+    env_area = (await backend.entity_measure(result.annotated_handles[0])).payload["area"]
+    assert env_area == pytest.approx(52 * 52)
+
+    in_body = await backend.create_rectangle(10, 50, 30, 75)
+    ok = await engine.check_setbacks(lot.payload["handle"], in_body.payload["handle"])
+    assert ok.passed
+
+
+async def test_check_setbacks_necked_lot_splits_footprint_must_fit_one_piece(backend):
+    """Dumbbell lot: two 40x40 squares joined by a 6 ft neck.
+
+    The setbacks split the buildable area into two separate pieces. A
+    footprint bridging both pieces across the neck must fail; one inside a
+    single piece passes.
+    """
+    profile = _make_profile(side_ft=4, rear_ft=4)
+    engine = ComplianceEngine(backend, profile)
+    lot = await backend.import_boundary(
+        points=[
+            [0, 0], [40, 0], [40, 17], [60, 17], [60, 0], [100, 0],
+            [100, 40], [60, 40], [60, 23], [40, 23], [40, 40], [0, 40],
+        ]
+    )
+    bridge = await backend.create_rectangle(20, 19, 80, 21)
+    result = await engine.check_setbacks(lot.payload["handle"], bridge.payload["handle"])
+    assert not result.passed
+    assert len(result.annotated_handles) == 2  # one setback outline per piece
+
+    one_piece = await backend.create_rectangle(10, 10, 30, 30)
+    ok = await engine.check_setbacks(lot.payload["handle"], one_piece.payload["handle"])
+    assert ok.passed
