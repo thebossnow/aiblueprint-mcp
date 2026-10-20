@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scales and counts are not affected. See `units.parse_length`.
 
 ### Fixed
+- **`compliance.check_setbacks` gave wrong answers on narrow and necked/flag
+  lots.** The buildable envelope was built by moving each lot edge straight
+  inward; on narrow lots or lots with a neck those edges cross, and the
+  `buffer(0)` cleanup turned the self-intersecting result into a
+  valid-looking polygon (e.g. a 6 ft wide lot with 4 ft setbacks got a fake
+  2 ft strip a footprint could "pass" in). The envelope is now the lot
+  polygon shrunk with a negative buffer (mitre joins, so rectangles keep
+  square corners and give the same result as before). If nothing is left the
+  check fails with "No buildable area"; if the setbacks split the lot into
+  several pieces, the footprint must fit inside a single piece, and one
+  setback outline is drawn per piece. An invalid (self-crossing) boundary now
+  fails with a clear message instead of being silently repaired.
 - **`compliance.check_setbacks` offset the buildable envelope outward, not
   inward.** `entity_offset`'s positive/negative distance is only "inward"
   for a counter-clockwise-wound polyline; `check_setbacks` called it with a
