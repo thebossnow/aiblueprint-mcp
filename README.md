@@ -293,7 +293,7 @@ uv run pytest -q         # run the test suite (134 tests)
 uv run ruff check src tests
 ```
 
-CI runs lint + tests on Python 3.10–3.12 via GitHub Actions (`.github/workflows/ci.yml`).
+CI runs lint + tests on Python 3.11–3.12 via GitHub Actions (`.github/workflows/ci.yml`).
 
 See [CHANGELOG.md](CHANGELOG.md) for release history and [RELEASING.md](RELEASING.md) for how releases are cut.
 
@@ -315,7 +315,7 @@ This project incorporates architecture and patterns from [autocad-mcp](https://g
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.11+
 - [uv](https://docs.astral.sh/uv/) package manager
 - LibreCAD (optional, for PNG previews)
 - 0 software licenses — ezdxf is MIT, LibreCAD is GPLv2
