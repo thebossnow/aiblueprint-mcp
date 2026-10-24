@@ -30,11 +30,11 @@ AIBlueprint MCP is an MCP (Model Context Protocol) server that lets AI coding ag
 | Production code | ~4,200 lines (11 modules) |
 | Tests | 101 — all passing (~1.8s), incl. stdio e2e integration suite |
 | Lint | Ruff — zero issues |
-| CI | GitHub Actions: ruff + pytest on Python 3.10/3.11/3.12, ~20s runs, all green |
+| CI | GitHub Actions: ruff + pytest on Python 3.11/3.12, ~20s runs, all green |
 | MCP tools | 8 (drawing, entity, layer, block, annotation, view, project, compliance) |
 | Jurisdiction data | California only: 10 counties, 15 cities bundled as JSON |
 | Dependencies | 6 production (mcp, ezdxf, matplotlib, Pillow, structlog, pydantic) + 3 dev |
-| Python support | 3.10+ |
+| Python support | 3.11+ |
 
 ### What Works Today
 
@@ -96,7 +96,7 @@ aiblueprint-mcp/
 │   ├── test_server.py           # JSON contract, validation, Image objects (6 tests)
 │   ├── test_validation.py       # Pydantic models: required, negative, extra (8 tests)
 │   └── test_integration.py      # Stdio e2e: full workflow + MCP dispatch (12 tests)
-├── .github/workflows/ci.yml     # ruff + pytest on Python 3.10/3.11/3.12
+├── .github/workflows/ci.yml     # ruff + pytest on Python 3.11/3.12
 ├── pyproject.toml               # Hatchling build, uv deps, ruff config
 ├── README.md                    # Full API reference + examples
 └── LICENSE                      # MIT
@@ -176,7 +176,7 @@ uv run aiblueprint-mcp
 ### CI Pipeline
 
 - **Trigger:** Push to `main`, pull requests
-- **Matrix:** Python 3.10, 3.11, 3.12
+- **Matrix:** Python 3.11, 3.12
 - **Steps:** Checkout → install uv → install Python → `uv sync --extra dev` → `ruff check` → `pytest -q`
 - **Runtime:** ~20 seconds
 - **Dependabot:** Active for `uv` dependency graph updates
