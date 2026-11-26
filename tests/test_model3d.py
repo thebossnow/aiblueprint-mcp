@@ -653,3 +653,47 @@ async def test_schedule_and_reference_notes_do_not_cut_openings(backend, workspa
     ir = _load_ir(r.payload["ir_path"])
     assert ir["openings"] == []
 
+
+def _set_insert_layer(backend, name: str, layer: str) -> None:
+    if layer not in backend._doc.layers:
+        backend._doc.layers.add(layer)
+    for e in backend._msp.query("INSERT"):
+        if str(e.dxf.name) == name:
+            e.dxf.layer = layer
+
+
+@pytest.mark.asyncio
+async def test_opening_layer_door_block_keeps_a_panel(backend, workspace):
+    """A D36 (or similar) INSERT on the OPENING layer is still a door with a panel.
+
+    Only a block name or attribute that clearly says opening or passage
+    becomes a doorless opening.
+    """
+    await backend.drawing_create("room")
+    await backend.create_rectangle(0, 0, 10, 12, "WALL")
+    await backend.block_define("D36", [
+        {"type": "LINE", "x1": 0, "y1": 0, "x2": 3, "y2": 0},
+    ])
+    await backend.block_define("PASSAGE", [
+        {"type": "LINE", "x1": 0, "y1": 0, "x2": 3, "y2": 0},
+    ])
+    d36 = await backend.block_insert("D36", 5, 0)
+    assert d36.ok, d36.error
+    pas = await backend.block_insert("PASSAGE", 0, 6)
+    assert pas.ok, pas.error
+    _set_insert_layer(backend, "D36", "OPENING")
+    _set_insert_layer(backend, "PASSAGE", "OPENING")
+    r = await backend.to_3d(path="d36_block.gltf", formats=["gltf"])
+    assert r.ok, r.error
+    ir = _load_ir(r.payload["ir_path"])
+    blocks = [o for o in ir["openings"] if o["source"] == "block"]
+    door = next(o for o in blocks if o["name"] == "D36")
+    assert door["kind"] == "door"
+    door_parts = {p["kind"] for p in ir["parts"] if door["id"] in p["name"]}
+    assert "door_leaf" in door_parts
+    passage = next(o for o in blocks if o["name"] == "PASSAGE")
+    assert passage["kind"] == "opening"
+    passage_parts = {p["kind"] for p in ir["parts"] if passage["id"] in p["name"]}
+    assert "door_leaf" not in passage_parts
+    assert "lintel" in passage_parts
+

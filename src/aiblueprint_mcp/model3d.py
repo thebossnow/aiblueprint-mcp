@@ -487,6 +487,25 @@ def _kind_from_layer(layer: str) -> str | None:
     return None
 
 
+def _kind_from_block(name: str, attribs: dict[str, str]) -> str | None:
+    """Kind from a block name and attributes, never from the INSERT layer.
+
+    The OPENING layer is a generic mark layer, so a door block named D36
+    (or any door-like name) on that layer must still default to a door
+    with a panel. Only a name or attribute that clearly says opening or
+    passage becomes a doorless opening.
+    """
+    blob = f"{name} {' '.join(attribs.values())}".strip()
+    kind = _kind_from_text(blob)
+    if kind:
+        return kind
+    if _REF_NOTE.search(blob):
+        return None
+    if re.search(r"\bPASSAGES?\b", blob, re.IGNORECASE):
+        return "opening"
+    return None
+
+
 def _resolve_opening_kind(text_kind: str | None, *layers: str) -> str:
     """Prefer a WINDOW layer over a nearby DOOR/WINDOW note."""
     layer_kind = None
@@ -823,11 +842,12 @@ def _infer_inserts(msp, model: Model3d, opts: To3dOptions) -> None:
         name = str(e.dxf.get("name", "") or "")
         attribs = _insert_attribs(e)
         kind = None
-        blob = f"{name} {layer} {' '.join(attribs.values())}"
-        if _is_opening_layer(layer, opts) or _kind_from_text(name):
-            kind = _kind_from_text(name) or _kind_from_text(layer) or "door"
-        elif _kind_from_text(blob) and not _is_wall_layer(layer, opts):
-            kind = _kind_from_text(blob)
+        block_kind = _kind_from_block(name, attribs)
+        if _is_opening_layer(layer, opts) or block_kind:
+            # Use the layer only for WINDOW/DOOR, never for the generic
+            # OPENING layer (that would turn a D36 door block into a
+            # doorless passage).
+            kind = block_kind or _kind_from_layer(layer) or "door"
         if not kind:
             continue
         insert = (float(e.dxf.insert[0]), float(e.dxf.insert[1]))
