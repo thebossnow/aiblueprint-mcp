@@ -45,6 +45,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (kind `opening`), not a door with a panel. Notes that point at another
   document (SEE WINDOW SCHEDULE, DOOR SCHEDULE, PER A-401) do not cut
   openings.
+- **`view.to_3d` door blocks on the OPENING layer keep a panel.** An INSERT
+  on the OPENING layer with a door-like name such as D36 defaults to a
+  door with a panel. Only a block name or attribute that clearly says
+  opening or passage becomes a doorless opening.
 - **`compliance.check_setbacks` gave wrong answers on narrow and necked/flag
   lots.** The buildable envelope was built by moving each lot edge straight
   inward; on narrow lots or lots with a neck those edges cross, and the
