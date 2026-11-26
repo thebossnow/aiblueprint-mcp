@@ -320,7 +320,7 @@ async def view(operation: str, data: dict | None = None):
                      a Blender Python script, and a JSON model. data: {path?,
                      formats?, wall_height?, wall_thickness?, door_height?,
                      window_sill?, window_head?, thickness_side?, wall_layers?,
-                     opening_layers?, ignore_layers?, include_casework?, openings?}
+                     opening_layers?, ignore_layers?, ignore_layers_mode?, include_casework?, openings?}
     """
     data = data or {}
     b = await _get_backend()
@@ -356,6 +356,7 @@ async def view(operation: str, data: dict | None = None):
             wall_layers=d.get("wall_layers"),
             opening_layers=d.get("opening_layers"),
             ignore_layers=d.get("ignore_layers"),
+            ignore_layers_mode=d.get("ignore_layers_mode") or "add",
             include_casework=d.get("include_casework", True),
             openings=d.get("openings"),
         )

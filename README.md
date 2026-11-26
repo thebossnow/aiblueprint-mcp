@@ -170,7 +170,7 @@ Example:
 | `preview` | Save DXF + render PNG via LibreCAD `dxf2png` — returns file paths |
 | `screenshot` | Render the drawing via matplotlib and return it as a native MCP image (no LibreCAD needed) |
 | `export` | Write a PNG/PDF/SVG raster/vector render, a GeoJSON `FeatureCollection`, a minimal IFC4 model, or a 3D glTF/OBJ export to the workspace. `data: {format?: "pdf"|"png"|"svg"|"geojson"|"ifc"|"gltf"|"obj", path?}` |
-| `to_3d` | Build a simple 3D model from the current plan. Raises walls, cuts door and window openings, and writes glTF (metres, Y-up), a JSON model, and optionally OBJ plus a Blender Python script. See below. |
+| `to_3d` | Build a simple 3D model from the current plan. Raises walls, cuts door and window openings, and writes glTF (metres, Y-up), a JSON model, and optionally GLB, OBJ, plus a Blender Python script. See below. |
 
 **IFC export** is intentionally minimal: aiblueprint drawings are flat 2D with no
 height data, so `ifc` only emits a site boundary plus, for each building-footprint
@@ -227,8 +227,14 @@ glTF and OBJ use metres and Y-up. The Blender script uses metres and Z-up, with 
 matching the plan. The JSON model stays in feet so you can check numbers before
 showing a client. This is a visualization, not a construction document. Today's
 room plans often mark openings only with ticks and notes; inferred sizes are
-listed in `warnings`. `view.export` with `format: "gltf"` or `"obj"` is a
-shortcut that uses the same defaults.
+listed in `warnings`. Kind `"opening"` is a doorless passage (no door panel).
+If a door or opening has a sill, the wall is filled below it.
+
+`ignore_layers` is added to the default ignore list (DIMENSION, ANNOTATION,
+TITLE-BLOCK, NORTH-ARROW, SETBACK-LINE). Pass `ignore_layers_mode: "replace"`
+to use only the list you give. A path ending in `.glb` writes a real binary
+GLB. `view.export` with `format: "gltf"`, `"glb"`, or `"obj"` is a shortcut
+that uses the same defaults.
 
 
 ### `project` — Mezcal bundle export

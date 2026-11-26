@@ -913,6 +913,7 @@ class AIBlueprintBackend:
         wall_layers=None,
         opening_layers=None,
         ignore_layers=None,
+        ignore_layers_mode="add",
         include_casework=True,
         openings=None,
     ) -> CommandResult:
@@ -942,6 +943,7 @@ class AIBlueprintBackend:
             wall_layers=wall_layers,
             opening_layers=opening_layers,
             ignore_layers=ignore_layers,
+            ignore_layers_mode=ignore_layers_mode,
             include_casework=include_casework,
             openings=openings,
         )
@@ -978,9 +980,9 @@ class AIBlueprintBackend:
     async def export(self, fmt: str = "pdf", path: str | None = None) -> CommandResult:
         """Export the current drawing to PNG/PDF/SVG/GeoJSON/IFC in the workspace."""
         fmt = fmt.lower()
-        if fmt not in ("pdf", "png", "svg", "geojson", "ifc", "gltf", "obj"):
-            raise CommandError("export format must be pdf, png, svg, geojson, ifc, gltf, or obj")
-        if fmt in ("gltf", "obj"):
+        if fmt not in ("pdf", "png", "svg", "geojson", "ifc", "gltf", "glb", "obj"):
+            raise CommandError("export format must be pdf, png, svg, geojson, ifc, gltf, glb, or obj")
+        if fmt in ("gltf", "glb", "obj"):
             return await self.to_3d(path=path, formats=[fmt])
         st = self._state()
         ext = "geojson" if fmt == "geojson" else fmt

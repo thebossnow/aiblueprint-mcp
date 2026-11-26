@@ -210,6 +210,7 @@ class To3dOptions:
     wall_layers: list[str] | None = None
     opening_layers: list[str] | None = None
     ignore_layers: list[str] | None = None
+    ignore_layers_mode: Literal["add", "replace"] = "add"
     include_casework: bool = True
     openings: list[dict[str, Any]] | None = None
 
@@ -221,8 +222,26 @@ def _ignored(layer: str, ignore: Sequence[str]) -> bool:
     return bool(_tokens(layer) & {i.upper() for i in ignore if i})
 
 
+def _ignore_list(opts: To3dOptions) -> list[str]:
+    """Return the effective ignore list.
+
+    By default ``ignore_layers`` is *added* to the built-in list (DIMENSION,
+    ANNOTATION, TITLE-BLOCK, NORTH-ARROW, SETBACK-LINE). Pass
+    ``ignore_layers_mode="replace"`` to use only the provided list.
+    """
+    extra = list(opts.ignore_layers or [])
+    if opts.ignore_layers_mode == "replace":
+        return extra
+    seen: list[str] = []
+    names = list(_IGNORE_DEFAULT) + extra
+    for name in names:
+        if name.upper() not in {s.upper() for s in seen}:
+            seen.append(name)
+    return seen
+
+
 def _is_wall_layer(layer: str, opts: To3dOptions) -> bool:
-    if _ignored(layer, opts.ignore_layers or _IGNORE_DEFAULT):
+    if _ignored(layer, _ignore_list(opts)):
         return False
     if opts.wall_layers:
         return layer.upper() in {n.upper() for n in opts.wall_layers}
@@ -233,7 +252,7 @@ def _is_wall_layer(layer: str, opts: To3dOptions) -> bool:
 
 
 def _is_opening_layer(layer: str, opts: To3dOptions) -> bool:
-    if _ignored(layer, opts.ignore_layers or _IGNORE_DEFAULT):
+    if _ignored(layer, _ignore_list(opts)):
         return False
     if opts.opening_layers:
         return layer.upper() in {n.upper() for n in opts.opening_layers}
@@ -241,7 +260,7 @@ def _is_opening_layer(layer: str, opts: To3dOptions) -> bool:
 
 
 def _is_casework_layer(layer: str, opts: To3dOptions) -> bool:
-    if _ignored(layer, opts.ignore_layers or _IGNORE_DEFAULT):
+    if _ignored(layer, _ignore_list(opts)):
         return False
     return bool(_tokens(layer) & _CASEWORK_TOKENS)
 
@@ -433,6 +452,21 @@ def _kind_from_text(text: str) -> str | None:
     return None
 
 
+def _kind_from_layer(layer: str) -> str | None:
+    """Return a kind implied by the entity's layer, if any.
+
+    WINDOW/WINDOWS -> window, DOOR -> door. The generic OPENING layer is
+    left unclassified so room-plan ticks can still be doors when a nearby
+    label says so (or default to a door).
+    """
+    tokens = _tokens(layer)
+    if "WINDOW" in tokens or "WINDOWS" in tokens:
+        return "window"
+    if "DOOR" in tokens:
+        return "door"
+    return None
+
+
 def _is_sliding(text: str) -> bool:
     return "SLIDING" in text.upper()
 
@@ -515,8 +549,8 @@ def _openings_overlap(a: Opening, b: Opening) -> bool:
 
 
 def _infer_ticks(msp, model: Model3d, opts: To3dOptions, texts: list[tuple[str, Vec2]]) -> None:
-    ticks: list[tuple[Vec2, Vec2]] = []
-    spans: list[tuple[Vec2, Vec2]] = []
+    ticks: list[tuple[Vec2, Vec2, str]] = []
+    spans: list[tuple[Vec2, Vec2, str]] = []
     for e in msp:
         if e.dxftype() != "LINE":
             continue
@@ -535,7 +569,7 @@ def _infer_ticks(msp, model: Model3d, opts: To3dOptions, texts: list[tuple[str, 
             mid = _mul(_add(a, b), 0.5)
             dist, _, _ = _project_on_wall(wall, mid)
             if align > 0.85 and dist <= max(_SNAP_FT, wall.thickness):
-                spans.append((a, b))
+                spans.append((a, b, layer))
                 used = True
                 break
             hit = _segment_intersection(a, b, wall.start, wall.end)
@@ -545,7 +579,7 @@ def _infer_ticks(msp, model: Model3d, opts: To3dOptions, texts: list[tuple[str, 
                 if min(da, db) <= max(_SNAP_FT, wall.thickness):
                     hit = mid
             if hit is not None and align < 0.85:
-                ticks.append((a, b))
+                ticks.append((a, b, layer))
                 used = True
                 break
         if not used:
@@ -554,10 +588,10 @@ def _infer_ticks(msp, model: Model3d, opts: To3dOptions, texts: list[tuple[str, 
                 f"({b[0]:.2f}, {b[1]:.2f}) did not meet a wall."
             )
 
-    by_wall: dict[str, list[float]] = {w.id: [] for w in model.walls}
+    by_wall: dict[str, list[tuple[float, str]]] = {w.id: [] for w in model.walls}
     wall_by_id = {w.id: w for w in model.walls}
     unmatched = 0
-    for a, b in ticks:
+    for a, b, layer in ticks:
         mid = _mul(_add(a, b), 0.5)
         best: tuple[WallSeg, float, float] | None = None
         for wall in model.walls:
@@ -572,36 +606,38 @@ def _infer_ticks(msp, model: Model3d, opts: To3dOptions, texts: list[tuple[str, 
         if best is None or best[1] > max(_SNAP_FT, best[0].thickness):
             unmatched += 1
             continue
-        by_wall[best[0].id].append(best[2])
+        by_wall[best[0].id].append((best[2], layer))
     if unmatched:
         model.warnings.append(f"{unmatched} opening tick(s) could not be paired to a wall.")
 
     for wall_id, ts in by_wall.items():
-        ts.sort()
+        ts.sort(key=lambda item: item[0])
         wall = wall_by_id[wall_id]
         i = 0
         leftover = None
         while i + 1 < len(ts):
-            t0, t1 = ts[i], ts[i + 1]
+            t0, layer0 = ts[i]
+            t1, layer1 = ts[i + 1]
             mid_pt = _add(wall.start, _mul(_sub(wall.end, wall.start), (t0 + t1) / 2))
             kind, text = _text_kind_near(texts, mid_pt)
+            kind = kind or _kind_from_layer(layer0) or _kind_from_layer(layer1) or "door"
             _add_opening(
-                model, wall, t0, t1, kind or "door",
+                model, wall, t0, t1, kind,
                 source="ticks", opts=opts, name=text or None,
             )
-            if kind is None:
+            if kind == "door" and not text and not _kind_from_layer(layer0):
                 model.warnings.append(
                     f"Opening on {wall.id} inferred from tick marks; treated as a door."
                 )
             i += 2
         if i < len(ts):
-            leftover = ts[i]
+            leftover = ts[i][0]
         if leftover is not None:
             model.warnings.append(
                 f"Unmatched opening tick on {wall.id} at t={leftover:.3f}."
             )
 
-    for a, b in spans:
+    for a, b, layer in spans:
         mid = _mul(_add(a, b), 0.5)
         found = _nearest_wall(model.walls, mid)
         if found is None:
@@ -614,8 +650,9 @@ def _infer_ticks(msp, model: Model3d, opts: To3dOptions, texts: list[tuple[str, 
         _, t1, _ = _project_on_wall(wall, b)
         mid_pt = _add(wall.start, _mul(_sub(wall.end, wall.start), (t0 + t1) / 2))
         kind, text = _text_kind_near(texts, mid_pt)
+        kind = kind or _kind_from_layer(layer) or "door"
         _add_opening(
-            model, wall, t0, t1, kind or "door", source="span", opts=opts, name=text or None,
+            model, wall, t0, t1, kind, source="span", opts=opts, name=text or None,
         )
 
 
@@ -732,7 +769,12 @@ def _infer_inserts(msp, model: Model3d, opts: To3dOptions) -> None:
         sill = _parse_attr_length(attribs.get("SILL"))
         head = None
         if height is not None:
-            head = (sill or 0.0) + height
+            if kind == "window":
+                base_sill = opts.window_sill if sill is None else sill
+            else:
+                base_sill = 0.0 if sill is None else sill
+            head = base_sill + height
+            sill = base_sill
         wall_len = _length(_sub(wall.end, wall.start))
         if wall_len < 1e-9:
             continue
@@ -788,10 +830,20 @@ def _prism(name: str, kind: str, origin: Vec3, u: Vec3, v: Vec3, w: Vec3) -> Par
         (2, 3, 7, 6),
         (3, 0, 4, 7),
     )
+    # Reverse winding when (u, v, w) is a left-handed frame (common for
+    # outward walls on a counterclockwise room outline) so faces point out.
+    cx = v[1] * w[2] - v[2] * w[1]
+    cy = v[2] * w[0] - v[0] * w[2]
+    cz = v[0] * w[1] - v[1] * w[0]
+    det = u[0] * cx + u[1] * cy + u[2] * cz
     faces: list[tuple[int, int, int]] = []
     for a, b, c, d in quads:
-        faces.append((a, b, c))
-        faces.append((a, c, d))
+        if det >= 0:
+            faces.append((a, b, c))
+            faces.append((a, c, d))
+        else:
+            faces.append((a, c, b))
+            faces.append((a, d, c))
     return Part(name=name, kind=kind, vertices=corners, faces=faces)
 
 
@@ -842,6 +894,45 @@ def _thin_fill(name: str, kind: str, wall: WallSeg, t0: float, t1: float, z0: fl
     return _prism(name, kind, origin, u, v, w)
 
 
+def _corner_posts(model: Model3d) -> list[Part]:
+    """Fill the thickness x thickness gap at each outside ring corner.
+
+    Outward walls meet at the interior corner, so a post is missing on the
+    outside. Centered walls have a half-thickness outside gap. Inward walls
+    already overlap at the corner and need no post.
+    """
+    posts: list[Part] = []
+    by_ring: dict[str, list[WallSeg]] = {}
+    for wall in model.walls:
+        if wall.ring_id:
+            by_ring.setdefault(wall.ring_id, []).append(wall)
+    for ring_id, walls in by_ring.items():
+        n = len(walls)
+        for i in range(n):
+            a, b = walls[i], walls[(i + 1) % n]
+            if a.thickness_side == "inward" or b.thickness_side == "inward":
+                continue
+            if a.thickness_side == "outward":
+                scale_a, scale_b = a.thickness, b.thickness
+            else:
+                scale_a, scale_b = a.thickness / 2.0, b.thickness / 2.0
+            ua = _mul(a.outward, scale_a)
+            vb = _mul(b.outward, scale_b)
+            if abs(ua[0] * vb[1] - ua[1] * vb[0]) < 1e-12:
+                continue
+            origin = (a.end[0], a.end[1], 0.0)
+            post = _prism(
+                f"{ring_id}_corner_{i + 1}",
+                "wall",
+                origin,
+                (ua[0], ua[1], 0.0),
+                (vb[0], vb[1], 0.0),
+                (0.0, 0.0, a.height),
+            )
+            posts.append(post)
+    return posts
+
+
 def _build_parts(model: Model3d) -> None:
     parts: list[Part] = []
     for wall in model.walls:
@@ -860,16 +951,19 @@ def _build_parts(model: Model3d) -> None:
             )
             if lintel:
                 parts.append(lintel)
-            if op.kind == "window" and op.sill > 1e-9:
+            # Wall under a sill for any kind; glass/leaf depends only on kind.
+            # kind "opening" is a doorless passage (lintel only, plus sill wall).
+            if op.sill > 1e-9:
                 sill = _wall_slice(
                     f"{op.id}_sill", "sill", wall, t0, t1, 0.0, op.sill,
                 )
                 if sill:
                     parts.append(sill)
+            if op.kind == "window":
                 glass = _thin_fill(f"{op.id}_glass", "glass", wall, t0, t1, op.sill, op.head)
                 if glass:
                     parts.append(glass)
-            else:
+            elif op.kind == "door":
                 leaf = _thin_fill(f"{op.id}_leaf", "door_leaf", wall, t0, t1, op.sill, op.head)
                 if leaf:
                     parts.append(leaf)
@@ -878,6 +972,8 @@ def _build_parts(model: Model3d) -> None:
             p = _wall_slice(f"{wall.id}_seg_end", "wall", wall, cursor, 1.0, 0.0, wall.height)
             if p:
                 parts.append(p)
+
+    parts.extend(_corner_posts(model))
 
     for ring_id, pts in model.floors:
         slab = _extrude_polygon(f"{ring_id}_slab", "slab", pts, -DEFAULT_SLAB_THICKNESS_FT, 0.0)
@@ -1063,9 +1159,8 @@ def _vertex_normals(verts: list[Vec3], faces: list[tuple[int, int, int]]) -> lis
     return out
 
 
-def write_gltf(parts: list[Part], gltf_path: Path) -> Path:
-    """Write a glTF 2.0 file and a sibling .bin buffer. Returns the .gltf path."""
-    bin_path = gltf_path.with_suffix(".bin")
+def _gltf_document_and_blob(parts: list[Part]) -> tuple[dict[str, Any], bytes]:
+    """Build a glTF 2.0 document and its BIN payload (no buffer URI yet)."""
     blob = bytearray()
     views: list[dict[str, Any]] = []
     accessors: list[dict[str, Any]] = []
@@ -1164,13 +1259,45 @@ def write_gltf(parts: list[Part], gltf_path: Path) -> Path:
         "nodes": nodes,
         "meshes": meshes,
         "materials": materials,
-        "buffers": [{"uri": bin_path.name, "byteLength": len(blob)}],
+        "buffers": [{"byteLength": len(blob)}],
         "bufferViews": views,
         "accessors": accessors,
     }
+    return doc, bytes(blob)
+
+
+def write_gltf(parts: list[Part], gltf_path: Path) -> Path:
+    """Write a glTF 2.0 file and a sibling .bin buffer. Returns the .gltf path."""
+    doc, blob = _gltf_document_and_blob(parts)
+    bin_path = gltf_path.with_suffix(".bin")
+    doc["buffers"] = [{"uri": bin_path.name, "byteLength": len(blob)}]
     gltf_path.write_text(json.dumps(doc, indent=2))
-    bin_path.write_bytes(bytes(blob))
+    bin_path.write_bytes(blob)
     return gltf_path
+
+
+def write_glb(parts: list[Part], glb_path: Path) -> Path:
+    """Write a binary glTF (GLB) file. Returns the .glb path."""
+    doc, blob = _gltf_document_and_blob(parts)
+    doc["buffers"] = [{"byteLength": len(blob)}]
+    json_bytes = json.dumps(doc, separators=(",", ":")).encode("utf-8")
+    while len(json_bytes) % 4:
+        json_bytes += b" "
+    bin_blob = bytearray(blob)
+    while len(bin_blob) % 4:
+        bin_blob.append(0)
+    json_len = len(json_bytes)
+    bin_len = len(bin_blob)
+    total = 12 + 8 + json_len + 8 + bin_len
+    payload = b"".join((
+        struct.pack("<4sII", b"glTF", 2, total),
+        struct.pack("<I4s", json_len, b"JSON"),
+        json_bytes,
+        struct.pack("<I4s", bin_len, b"BIN\x00"),
+        bytes(bin_blob),
+    ))
+    glb_path.write_bytes(payload)
+    return glb_path
 
 
 def write_obj(parts: list[Part], obj_path: Path) -> Path:
@@ -1244,7 +1371,34 @@ def write_blender_script(parts: list[Part], script_path: Path) -> Path:
     return script_path
 
 
+def validate_to_3d_heights(
+    wall_height: float,
+    door_height: float,
+    window_sill: float,
+    window_head: float,
+) -> None:
+    """Reject combinations that would produce a zero-height window or no lintel."""
+    if window_head <= window_sill:
+        raise CommandError(
+            f"window_head ({window_head:g} ft) must be greater than "
+            f"window_sill ({window_sill:g} ft)."
+        )
+    if window_head > wall_height:
+        raise CommandError(
+            f"window_head ({window_head:g} ft) must be at most "
+            f"wall_height ({wall_height:g} ft)."
+        )
+    if door_height >= wall_height:
+        raise CommandError(
+            f"door_height ({door_height:g} ft) must be less than "
+            f"wall_height ({wall_height:g} ft) so a lintel can fit."
+        )
+
+
 def build_model(msp, opts: To3dOptions) -> Model3d:
+    validate_to_3d_heights(
+        opts.wall_height, opts.door_height, opts.window_sill, opts.window_head,
+    )
     model = Model3d(
         defaults={
             "wall_height_ft": opts.wall_height,
@@ -1288,31 +1442,42 @@ def export_to_3d(
     wall_layers: list[str] | None = None,
     opening_layers: list[str] | None = None,
     ignore_layers: list[str] | None = None,
+    ignore_layers_mode: Literal["add", "replace"] = "add",
     include_casework: bool = True,
     openings: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Build the model and write requested formats inside the workspace."""
     fmts = [f.lower() for f in (list(formats) if formats is not None else list(DEFAULT_FORMATS))]
-    allowed = {"gltf", "obj", "blender.py"}
+    allowed = {"gltf", "glb", "obj", "blender.py"}
     bad = [f for f in fmts if f not in allowed]
     if bad:
-        raise CommandError(f"Unknown 3D format {bad[0]!r}. Use gltf, obj, or blender.py.")
+        raise CommandError(f"Unknown 3D format {bad[0]!r}. Use gltf, glb, obj, or blender.py.")
     if not fmts:
-        raise CommandError("formats must include at least one of gltf, obj, blender.py.")
+        raise CommandError("formats must include at least one of gltf, glb, obj, blender.py.")
 
-    default_ext = "gltf" if "gltf" in fmts else ("obj" if "obj" in fmts else "blender.py")
+    default_ext = "gltf"
+    if "glb" in fmts and "gltf" not in fmts:
+        default_ext = "glb"
+    elif "gltf" not in fmts and "glb" not in fmts:
+        default_ext = "obj" if "obj" in fmts else "blender.py"
     target = path or f"{drawing_name}.{default_ext}"
     try:
         resolved = config.resolve_path(target)
     except ValueError as exc:
         raise CommandError(str(exc)) from exc
     resolved.parent.mkdir(parents=True, exist_ok=True)
+    suffix = resolved.suffix.lower()
     if resolved.name.endswith(".blender.py"):
         stem = resolved.with_name(resolved.name[: -len(".blender.py")])
-    elif resolved.suffix.lower() in {".gltf", ".glb", ".obj", ".py", ".json"}:
+    elif suffix in {".gltf", ".glb", ".obj", ".py", ".json"}:
         stem = resolved.with_suffix("")
     else:
         stem = resolved
+    # A .glb path writes a real binary GLB (not a misnamed .gltf).
+    if suffix == ".glb" and "glb" not in fmts:
+        fmts = ["glb" if f == "gltf" else f for f in fmts]
+        if "glb" not in fmts:
+            fmts.insert(0, "glb")
 
     opts = To3dOptions(
         wall_height=wall_height,
@@ -1324,6 +1489,7 @@ def export_to_3d(
         wall_layers=wall_layers,
         opening_layers=opening_layers,
         ignore_layers=ignore_layers,
+        ignore_layers_mode=ignore_layers_mode,
         include_casework=include_casework,
         openings=openings,
     )
@@ -1337,13 +1503,19 @@ def export_to_3d(
         gp = write_gltf(model.parts, stem.with_suffix(".gltf"))
         files["gltf"] = str(gp)
         files["gltf_bin"] = str(gp.with_suffix(".bin"))
+    if "glb" in fmts:
+        files["glb"] = str(write_glb(model.parts, stem.with_suffix(".glb")))
     if "obj" in fmts:
         files["obj"] = str(write_obj(model.parts, stem.with_suffix(".obj")))
     if "blender.py" in fmts:
         files["blender_py"] = str(write_blender_script(model.parts, stem.with_name(stem.name + ".blender.py")))
 
-    if "gltf" in fmts:
+    if "glb" in fmts and suffix == ".glb":
+        primary, primary_fmt = files["glb"], "glb"
+    elif "gltf" in fmts:
         primary, primary_fmt = files["gltf"], "gltf"
+    elif "glb" in fmts:
+        primary, primary_fmt = files["glb"], "glb"
     elif "obj" in fmts:
         primary, primary_fmt = files["obj"], "obj"
     else:

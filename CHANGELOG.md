@@ -22,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scales and counts are not affected. See `units.parse_length`.
 
 ### Fixed
+- **`view.to_3d` corner, opening, and export review fixes.** Outside corners
+  of outward walls are closed with a thickness post. Kind `opening` is a
+  doorless passage; a door or opening with a sill gets a wall under the sill.
+  `window_head` must be greater than `window_sill`, and `door_height` must
+  be less than `wall_height`. `ignore_layers` is added to the default list
+  (`ignore_layers_mode: "replace"` to override). A `.glb` path writes a real
+  binary GLB.
 - **`compliance.check_setbacks` gave wrong answers on narrow and necked/flag
   lots.** The buildable envelope was built by moving each lot edge straight
   inward; on narrow lots or lots with a neck those edges cross, and the

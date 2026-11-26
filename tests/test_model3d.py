@@ -33,6 +33,19 @@ def _slab_bbox(ir: dict) -> tuple[list[float], list[float]]:
     return slabs[0]["bbox"]["min"], slabs[0]["bbox"]["max"]
 
 
+def _point_in_ir_parts(ir: dict, x: float, y: float, z: float, eps: float = 1e-6) -> bool:
+    """True if (x, y, z) in feet sits inside any part's bounding box."""
+    for part in ir["parts"]:
+        mn, mx = part["bbox"]["min"], part["bbox"]["max"]
+        if (
+            mn[0] - eps <= x <= mx[0] + eps
+            and mn[1] - eps <= y <= mx[1] + eps
+            and mn[2] - eps <= z <= mx[2] + eps
+        ):
+            return True
+    return False
+
+
 @pytest.mark.asyncio
 async def test_room_with_ticks_cuts_door_and_keeps_interior(backend, workspace):
     await _room_with_door(backend)
@@ -277,3 +290,158 @@ def test_view_to_3d_rejects_empty_formats():
 def test_view_export_accepts_gltf():
     assert validate("view.export", {"format": "gltf"})["format"] == "gltf"
     assert validate("view.export", {"format": "obj"})["format"] == "obj"
+
+
+@pytest.mark.asyncio
+async def test_outside_corners_are_closed(backend, workspace):
+    """Outward walls leave a thickness x thickness gap unless a corner post is added."""
+    await backend.drawing_create("room")
+    await backend.create_rectangle(0, 0, 10, 12, "WALL")
+    r = await backend.to_3d(formats=["gltf"])
+    assert r.ok, r.error
+    ir = _load_ir(r.payload["ir_path"])
+    thickness = 0.5
+    mid_z = 4.0
+    # Center of each missing outside corner square, mid-wall height.
+    samples = [
+        (-thickness / 2, -thickness / 2, mid_z),       # SW
+        (10 + thickness / 2, -thickness / 2, mid_z),   # SE
+        (10 + thickness / 2, 12 + thickness / 2, mid_z),  # NE
+        (-thickness / 2, 12 + thickness / 2, mid_z),   # NW
+    ]
+    missing = [p for p in samples if not _point_in_ir_parts(ir, *p)]
+    assert missing == [], f"outside corners not filled: {missing}"
+    # A point just inside the room, at mid height, is still empty (not a wall).
+    assert not _point_in_ir_parts(ir, 0.25, 0.25, mid_z)
+
+
+@pytest.mark.asyncio
+async def test_kind_opening_is_a_doorless_passage(backend, workspace):
+    await backend.drawing_create("room")
+    await backend.create_rectangle(0, 0, 10, 12, "WALL")
+    r = await backend.to_3d(
+        path="opening.gltf",
+        formats=["gltf"],
+        openings=[{"kind": "opening", "x1": 0, "y1": 2, "x2": 0, "y2": 5}],
+    )
+    assert r.ok, r.error
+    ir = _load_ir(r.payload["ir_path"])
+    assert ir["openings"][0]["kind"] == "opening"
+    kinds = {p["kind"] for p in ir["parts"]}
+    assert "door_leaf" not in kinds
+    assert "glass" not in kinds
+    assert "lintel" in kinds
+
+
+@pytest.mark.asyncio
+async def test_sill_fill_on_door_and_opening(backend, workspace):
+    await backend.drawing_create("room")
+    await backend.create_rectangle(0, 0, 10, 12, "WALL")
+    r = await backend.to_3d(
+        path="sills.gltf",
+        formats=["gltf"],
+        openings=[
+            {"kind": "door", "x1": 0, "y1": 1, "x2": 0, "y2": 4, "sill": 1.0, "head": 7.0},
+            {"kind": "opening", "x1": 10, "y1": 2, "x2": 10, "y2": 5, "sill": 1.5, "head": 7.0},
+        ],
+    )
+    assert r.ok, r.error
+    ir = _load_ir(r.payload["ir_path"])
+    sills = [p for p in ir["parts"] if p["kind"] == "sill"]
+    assert len(sills) == 2
+    tops = sorted(p["bbox"]["max"][2] for p in sills)
+    assert tops[0] == pytest.approx(1.0)
+    assert tops[1] == pytest.approx(1.5)
+    kinds_by_opening = {}
+    for op in ir["openings"]:
+        related = [p["kind"] for p in ir["parts"] if op["id"] in p["name"]]
+        kinds_by_opening[op["kind"]] = set(related)
+    assert "door_leaf" in kinds_by_opening["door"]
+    assert "sill" in kinds_by_opening["door"]
+    assert "door_leaf" not in kinds_by_opening["opening"]
+    assert "sill" in kinds_by_opening["opening"]
+
+
+@pytest.mark.asyncio
+async def test_zero_sill_window_gets_glass_not_a_door(backend, workspace):
+    await backend.drawing_create("room")
+    await backend.create_rectangle(0, 0, 10, 12, "WALL")
+    r = await backend.to_3d(
+        path="full_window.gltf",
+        formats=["gltf"],
+        openings=[{"kind": "window", "x1": 3, "y1": 12, "x2": 6, "y2": 12, "sill": 0, "head": 7}],
+        window_sill=0,
+        window_head=7,
+    )
+    assert r.ok, r.error
+    ir = _load_ir(r.payload["ir_path"])
+    kinds = {p["kind"] for p in ir["parts"]}
+    assert "glass" in kinds
+    assert "door_leaf" not in kinds
+    assert "sill" not in kinds
+
+
+@pytest.mark.asyncio
+async def test_bad_heights_are_rejected(backend, workspace):
+    await backend.drawing_create("room")
+    await backend.create_rectangle(0, 0, 10, 12, "WALL")
+    r = await backend.to_3d(window_sill=4, window_head=4)
+    assert not r.ok
+    assert "window_head" in r.error and "window_sill" in r.error
+    r = await backend.to_3d(door_height=8, wall_height=8)
+    assert not r.ok
+    assert "door_height" in r.error and "wall_height" in r.error
+
+
+def test_validate_rejects_bad_heights():
+    with pytest.raises(ValidationError, match="window_head"):
+        validate("view.to_3d", {"window_sill": 4, "window_head": 3})
+    with pytest.raises(ValidationError, match="door_height"):
+        validate("view.to_3d", {"door_height": 9, "wall_height": 8})
+
+
+@pytest.mark.asyncio
+async def test_ignore_layers_adds_to_defaults(backend, workspace):
+    await backend.drawing_create("room")
+    await backend.create_rectangle(0, 0, 10, 12, "WALL")
+    await backend.create_rectangle(20, 0, 24, 4, "ANNOTATION")
+    # ANNOTATION is in the default ignore list; wall_layers would otherwise
+    # pick it up. Adding FOO must not drop that default.
+    r = await backend.to_3d(
+        path="add.gltf",
+        formats=["gltf"],
+        wall_layers=["WALL", "ANNOTATION"],
+        ignore_layers=["FOO"],
+    )
+    assert r.ok, r.error
+    assert r.payload["wall_count"] == 4
+    r2 = await backend.to_3d(
+        path="replace.gltf",
+        formats=["gltf"],
+        wall_layers=["WALL", "ANNOTATION"],
+        ignore_layers=["FOO"],
+        ignore_layers_mode="replace",
+    )
+    assert r2.ok, r2.error
+    assert r2.payload["wall_count"] == 8
+
+
+@pytest.mark.asyncio
+async def test_glb_path_writes_binary_glb(backend, workspace):
+    await backend.drawing_create("room")
+    await backend.create_rectangle(0, 0, 10, 12, "WALL")
+    r = await backend.to_3d(path="house.glb", formats=["gltf"])
+    assert r.ok, r.error
+    assert r.payload["format"] == "glb"
+    glb = Path(r.payload["path"])
+    assert glb.suffix == ".glb"
+    data = glb.read_bytes()
+    assert data[:4] == b"glTF"
+    assert int.from_bytes(data[8:12], "little") == len(data)
+    r2 = await backend.export("glb", path="export.glb")
+    assert r2.ok, r2.error
+    assert Path(r2.payload["path"]).read_bytes()[:4] == b"glTF"
+
+
+def test_view_export_accepts_glb():
+    assert validate("view.export", {"format": "glb"})["format"] == "glb"
