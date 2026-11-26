@@ -320,8 +320,38 @@ class ImportBoundary(_Base):
 
 # ── view ───────────────────────────────────────────────────────────────
 class ViewExport(_Base):
-    format: Literal["pdf", "png", "svg", "geojson", "ifc"] = "pdf"
+    format: Literal["pdf", "png", "svg", "geojson", "ifc", "gltf", "obj"] = "pdf"
     path: str | None = None
+
+
+class OpeningSpec(_Base):
+    kind: Literal["door", "window", "opening"]
+    x1: Ft
+    y1: Ft
+    x2: Ft
+    y2: Ft
+    sill: Ft | None = None
+    head: Ft | None = None
+    width: Ft | None = Field(default=None, gt=0)
+    name: str | None = None
+
+
+class ViewTo3d(_Base):
+    path: str | None = None
+    formats: list[Literal["gltf", "obj", "blender.py"]] = Field(
+        default=["gltf", "blender.py"], min_length=1
+    )
+    wall_height: Ft = Field(default=8.0, gt=0)
+    wall_thickness: Ft = Field(default=0.5, gt=0)
+    door_height: Ft = Field(default=6.0 + 8.0 / 12.0, gt=0)
+    window_sill: Ft = Field(default=3.0, ge=0)
+    window_head: Ft = Field(default=6.0 + 8.0 / 12.0, gt=0)
+    thickness_side: Literal["inward", "outward", "center"] | None = None
+    wall_layers: list[str] | None = None
+    opening_layers: list[str] | None = None
+    ignore_layers: list[str] | None = None
+    include_casework: bool = True
+    openings: list[OpeningSpec] = Field(default_factory=list)
 
 
 # ── registry ───────────────────────────────────────────────────────────
@@ -372,6 +402,7 @@ _MODELS: dict[str, type[_Base]] = {
     "project.generate_room_plan": GenerateRoomPlan,
     # view
     "view.export": ViewExport,
+    "view.to_3d": ViewTo3d,
     # annotation
     "annotation.create_text": CreateText,
     "annotation.create_dimension_aligned": DimAligned,

@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`view.to_3d`.** Builds a simple 3D model from the current DXF plan: walls
+  raised to height (default 8', 6" thick, outward on a room outline), door and
+  window openings cut from tick marks, notes, blocks, or explicit `openings`,
+  and optional cabinet/island/appliance boxes. Writes glTF (metres, Y-up) plus
+  a JSON model, and optionally OBJ and a Blender Python script. No new required
+  dependencies, and Blender is not required to produce the files. `view.export`
+  also accepts `format: "gltf"` or `"obj"` as a shortcut. New `model3d` module.
 - **Architectural length input.** Every length field in tool inputs (coordinates,
   radii, offsets, lot/ADU/room dimensions) now also accepts feet-and-inches
   strings: `12'-6"`, `5' 6 1/2"`, `66"`, `12 ft`, `6in`, or `"5 5"` (5 ft 5 in), including `compliance.check_height`'s `ridge_y`/`grade_y`.

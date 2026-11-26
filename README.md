@@ -169,7 +169,8 @@ Example:
 |-----------|-------------|
 | `preview` | Save DXF + render PNG via LibreCAD `dxf2png` — returns file paths |
 | `screenshot` | Render the drawing via matplotlib and return it as a native MCP image (no LibreCAD needed) |
-| `export` | Write a PNG/PDF/SVG raster/vector render, a GeoJSON `FeatureCollection`, or a minimal IFC4 model to the workspace. `data: {format?: "pdf"|"png"|"svg"|"geojson"|"ifc", path?}` |
+| `export` | Write a PNG/PDF/SVG raster/vector render, a GeoJSON `FeatureCollection`, a minimal IFC4 model, or a 3D glTF/OBJ export to the workspace. `data: {format?: "pdf"|"png"|"svg"|"geojson"|"ifc"|"gltf"|"obj", path?}` |
+| `to_3d` | Build a simple 3D model from the current plan. Raises walls, cuts door and window openings, and writes glTF (metres, Y-up), a JSON model, and optionally OBJ plus a Blender Python script. See below. |
 
 **IFC export** is intentionally minimal: aiblueprint drawings are flat 2D with no
 height data, so `ifc` only emits a site boundary plus, for each building-footprint
@@ -178,6 +179,57 @@ doors, windows, roofs, or stairs are fabricated. Footprints are picked up by lay
 name (`LOT`/`PARCEL`/`PROPERTY` → site; `FOOTPRINT`/`BUILDING`/`ADU`/`STRUCTURE` →
 building), the same convention `import_boundary` and the site-plan generator already
 use. Requires the optional `ifcopenshell` dependency: `uv sync --extra ifc`.
+
+**3D from a plan (`view.to_3d`).** This is for interior bid drawings (Tricity kitchens
+and baths), not the site-massing IFC path above. It reads walls on a `WALL` layer
+(or a footprint layer), infers openings from `OPENING` tick marks and nearby
+"DOOR"/"WINDOW" notes, and optionally extrudes `CABINET`/`ISLAND`/`APPLIANCE`
+as 3 ft boxes. Defaults are US residential: 8' walls, 6" thickness (outward on a
+room outline, so the measured interior size is kept), 6'-8" doors, 3' window sills.
+No new Python packages, no Blender, and no GPU are required to write the files.
+
+Example:
+
+```python
+from aiblueprint_mcp.backend import AIBlueprintBackend
+import asyncio
+
+async def main():
+    b = AIBlueprintBackend()
+    await b.initialize()
+    await b.drawing_create("kitchen")
+    await b.create_rectangle(0, 0, 10, 12, "WALL")
+    await b.create_line(-0.5, 2, 0.5, 2, "OPENING")
+    await b.create_line(-0.5, 8, 0.5, 8, "OPENING")
+    await b.create_text(-3.5, 5, "SLIDING DOOR", height=1.0, layer="ANNOTATION")
+    result = await b.to_3d()
+    print(result.payload["path"])       # kitchen.gltf
+    print(result.payload["ir_path"])    # kitchen.model3d.json
+    print(result.payload["files"])      # also kitchen.bin and kitchen.blender.py
+
+asyncio.run(main())
+```
+
+MCP call:
+
+```json
+{
+  "operation": "to_3d",
+  "data": {
+    "wall_height": "8'",
+    "wall_thickness": "6\"",
+    "formats": ["gltf", "obj", "blender.py"]
+  }
+}
+```
+
+glTF and OBJ use metres and Y-up. The Blender script uses metres and Z-up, with XY
+matching the plan. The JSON model stays in feet so you can check numbers before
+showing a client. This is a visualization, not a construction document. Today's
+room plans often mark openings only with ticks and notes; inferred sizes are
+listed in `warnings`. `view.export` with `format: "gltf"` or `"obj"` is a
+shortcut that uses the same defaults.
+
 
 ### `project` — Mezcal bundle export
 
@@ -289,7 +341,7 @@ input is rejected with an example-bearing message.
 
 ```bash
 uv sync --extra dev      # install dev dependencies (pytest, ruff)
-uv run pytest -q         # run the test suite (134 tests)
+uv run pytest -q         # run the test suite
 uv run ruff check src tests
 ```
 

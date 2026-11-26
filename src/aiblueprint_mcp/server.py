@@ -314,7 +314,13 @@ async def view(operation: str, data: dict | None = None):
     Operations:
       screenshot   — Render current drawing as a PNG image (matplotlib).
       preview      — Save DXF + render PNG via LibreCAD. Returns file paths.
-      export       — Write PNG/PDF/SVG/GeoJSON to the workspace. data: {format?, path?}
+      export       — Write PNG/PDF/SVG/GeoJSON/IFC/glTF/OBJ to the workspace. data: {format?, path?}
+      to_3d        — Build a simple 3D model from the current plan (walls, openings,
+                     optional casework). Writes glTF (metres, Y-up), optional OBJ,
+                     a Blender Python script, and a JSON model. data: {path?,
+                     formats?, wall_height?, wall_thickness?, door_height?,
+                     window_sill?, window_head?, thickness_side?, wall_layers?,
+                     opening_layers?, ignore_layers?, include_casework?, openings?}
     """
     data = data or {}
     b = await _get_backend()
@@ -333,6 +339,26 @@ async def view(operation: str, data: dict | None = None):
         except ValidationError as ve:
             return _err(f"Invalid input for view.{operation}: {ve}")
         r = await b.export(d.get("format", "pdf"), d.get("path"))
+    elif operation == "to_3d":
+        try:
+            d = _check("view", operation, data)
+        except ValidationError as ve:
+            return _err(f"Invalid input for view.{operation}: {ve}")
+        r = await b.to_3d(
+            path=d.get("path"),
+            formats=d.get("formats"),
+            wall_height=d.get("wall_height"),
+            wall_thickness=d.get("wall_thickness"),
+            door_height=d.get("door_height"),
+            window_sill=d.get("window_sill"),
+            window_head=d.get("window_head"),
+            thickness_side=d.get("thickness_side"),
+            wall_layers=d.get("wall_layers"),
+            opening_layers=d.get("opening_layers"),
+            ignore_layers=d.get("ignore_layers"),
+            include_casework=d.get("include_casework", True),
+            openings=d.get("openings"),
+        )
     else:
         return _err(f"Unknown view operation: {operation}")
     return _result(r)
