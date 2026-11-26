@@ -899,6 +899,56 @@ class AIBlueprintBackend:
                 return CommandResult(ok=True, payload={"tag": tag, "value": value})
         raise CommandError(f"Attribute '{tag}' not found")
 
+    @_op
+    async def to_3d(
+        self,
+        path=None,
+        formats=None,
+        wall_height=None,
+        wall_thickness=None,
+        door_height=None,
+        window_sill=None,
+        window_head=None,
+        thickness_side=None,
+        wall_layers=None,
+        opening_layers=None,
+        ignore_layers=None,
+        ignore_layers_mode="add",
+        include_casework=True,
+        openings=None,
+    ) -> CommandResult:
+        """Build a simple 3D model from the current drawing and write files."""
+        from aiblueprint_mcp.model3d import (
+            DEFAULT_DOOR_HEIGHT_FT,
+            DEFAULT_WALL_HEIGHT_FT,
+            DEFAULT_WALL_THICKNESS_FT,
+            DEFAULT_WINDOW_HEAD_FT,
+            DEFAULT_WINDOW_SILL_FT,
+            export_to_3d,
+        )
+
+        st = self._state()
+        payload = export_to_3d(
+            self._msp,
+            config=self.config,
+            drawing_name=st.name,
+            path=path,
+            formats=formats,
+            wall_height=DEFAULT_WALL_HEIGHT_FT if wall_height is None else wall_height,
+            wall_thickness=DEFAULT_WALL_THICKNESS_FT if wall_thickness is None else wall_thickness,
+            door_height=DEFAULT_DOOR_HEIGHT_FT if door_height is None else door_height,
+            window_sill=DEFAULT_WINDOW_SILL_FT if window_sill is None else window_sill,
+            window_head=DEFAULT_WINDOW_HEAD_FT if window_head is None else window_head,
+            thickness_side=thickness_side,
+            wall_layers=wall_layers,
+            opening_layers=opening_layers,
+            ignore_layers=ignore_layers,
+            ignore_layers_mode=ignore_layers_mode,
+            include_casework=include_casework,
+            openings=openings,
+        )
+        return CommandResult(ok=True, payload=payload)
+
     # ── Rendering ──────────────────────────────────────────────────────
 
     def _render_bytes(self, fmt: str = "png") -> bytes:
@@ -930,8 +980,10 @@ class AIBlueprintBackend:
     async def export(self, fmt: str = "pdf", path: str | None = None) -> CommandResult:
         """Export the current drawing to PNG/PDF/SVG/GeoJSON/IFC in the workspace."""
         fmt = fmt.lower()
-        if fmt not in ("pdf", "png", "svg", "geojson", "ifc"):
-            raise CommandError("export format must be pdf, png, svg, geojson, or ifc")
+        if fmt not in ("pdf", "png", "svg", "geojson", "ifc", "gltf", "glb", "obj"):
+            raise CommandError("export format must be pdf, png, svg, geojson, ifc, gltf, glb, or obj")
+        if fmt in ("gltf", "glb", "obj"):
+            return await self.to_3d(path=path, formats=[fmt])
         st = self._state()
         ext = "geojson" if fmt == "geojson" else fmt
         target = path or f"{st.name}.{ext}"

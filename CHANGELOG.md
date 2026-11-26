@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`view.to_3d`.** Builds a simple 3D model from the current DXF plan: walls
+  raised to height (default 8', 6" thick, outward on a room outline), door and
+  window openings cut from tick marks, notes, blocks, or explicit `openings`,
+  and optional cabinet/island/appliance boxes. Writes glTF (metres, Y-up) plus
+  a JSON model, and optionally OBJ and a Blender Python script. No new required
+  dependencies, and Blender is not required to produce the files. `view.export`
+  also accepts `format: "gltf"` or `"obj"` as a shortcut. New `model3d` module.
 - **Architectural length input.** Every length field in tool inputs (coordinates,
   radii, offsets, lot/ADU/room dimensions) now also accepts feet-and-inches
   strings: `12'-6"`, `5' 6 1/2"`, `66"`, `12 ft`, `6in`, or `"5 5"` (5 ft 5 in), including `compliance.check_height`'s `ridge_y`/`grade_y`.
@@ -15,6 +22,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scales and counts are not affected. See `units.parse_length`.
 
 ### Fixed
+- **`view.to_3d` corner, opening, and export review fixes.** Outside corners
+  of outward walls are closed with a thickness post. Kind `opening` is a
+  doorless passage; a door or opening with a sill gets a wall under the sill.
+  `window_head` must be greater than `window_sill`, and `door_height` must
+  be less than `wall_height`. `ignore_layers` is added to the default list
+  (`ignore_layers_mode: "replace"` to override). A `.glb` path writes a real
+  binary GLB.
+- **`view.to_3d` text matching, winding, and L-corner review fixes.** Door
+  and window notes match whole words (so "OUTDOOR KITCHEN" is not a door),
+  skip title-block and ignored layers, and use a 4 ft radius. A note cannot
+  override a tick pair whose layer is WINDOW. Clockwise slab, cabinet, and
+  island outlines are normalized by signed area so sides face out. L-shaped
+  rooms place the corner post on the outside of a convex corner or the
+  inside of a reflex corner, for outward, inward, and centered walls. Box
+  vertices are unique per face (flat shading). A warning is raised when an
+  opening is wider than its wall.
+- **`view.to_3d` text-only openings and note kinds.** A default-width
+  text-only opening is skipped when its span overlaps an opening already
+  on that wall, so an off-center DOOR or WINDOW label just past a tick
+  pair no longer widens the hole. An OPENING note is a doorless passage
+  (kind `opening`), not a door with a panel. Notes that point at another
+  document (SEE WINDOW SCHEDULE, DOOR SCHEDULE, PER A-401) do not cut
+  openings.
 - **`compliance.check_setbacks` gave wrong answers on narrow and necked/flag
   lots.** The buildable envelope was built by moving each lot edge straight
   inward; on narrow lots or lots with a neck those edges cross, and the
