@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from aiblueprint_mcp.ifc_export import FEET_TO_METERS
+from aiblueprint_mcp.model3d import To3dOptions, build_model
 from aiblueprint_mcp.room_plan_generator import RoomFloorPlanConfig, RoomFloorPlanGenerator
 from aiblueprint_mcp.validation import ValidationError, validate
 
@@ -445,3 +446,154 @@ async def test_glb_path_writes_binary_glb(backend, workspace):
 
 def test_view_export_accepts_glb():
     assert validate("view.export", {"format": "glb"})["format"] == "glb"
+
+
+def _l_room_points():
+    # Clockwise L: interior is to the right of travel. The only reflex
+    # (inside) corner is at (4, 6).
+    return [(0, 0), (0, 12), (4, 12), (4, 6), (10, 6), (10, 0)]
+
+
+@pytest.mark.asyncio
+async def test_l_shaped_clockwise_room_corners_are_closed(backend, workspace):
+    """Convex and reflex corners stay closed for outward, inward, and center walls."""
+    thickness = 0.5
+    mid_z = 4.0
+    await backend.drawing_create("room")
+    await backend.create_polyline(_l_room_points(), closed=True, layer="WALL")
+
+    # Outward: fill the five outside convex corners; leave the inside notch empty
+    # (outward walls already overlap there, and a post on the wrong side would
+    # sit in the room).
+    r = await backend.to_3d(path="l_out.gltf", formats=["gltf"], thickness_side="outward")
+    assert r.ok, r.error
+    ir = _load_ir(r.payload["ir_path"])
+    outward_corners = [
+        (-thickness / 2, -thickness / 2, mid_z),
+        (-thickness / 2, 12 + thickness / 2, mid_z),
+        (4 + thickness / 2, 12 + thickness / 2, mid_z),
+        (10 + thickness / 2, 6 + thickness / 2, mid_z),
+        (10 + thickness / 2, -thickness / 2, mid_z),
+    ]
+    missing = [p for p in outward_corners if not _point_in_ir_parts(ir, *p)]
+    assert missing == [], f"outward convex corners not filled: {missing}"
+    # Interior of the reflex corner, and a point just inside the SW corner.
+    assert not _point_in_ir_parts(ir, 3.75, 5.75, mid_z)
+    assert not _point_in_ir_parts(ir, 0.25, 0.25, mid_z)
+    boxes = [p for p in ir["parts"] if p["kind"] == "wall"]
+    assert boxes and all(p["vertex_count"] == 24 for p in boxes)
+
+    # Inward: fill the 6" x 6" notch at (4, 6); do not plant a post outside
+    # a convex corner.
+    r = await backend.to_3d(path="l_in.gltf", formats=["gltf"], thickness_side="inward")
+    assert r.ok, r.error
+    ir = _load_ir(r.payload["ir_path"])
+    assert _point_in_ir_parts(ir, 3.75, 5.75, mid_z), "inward reflex notch was not filled"
+    assert not _point_in_ir_parts(ir, -thickness / 2, -thickness / 2, mid_z)
+
+    # Center: half-thickness post outside convex corners and inside the reflex.
+    r = await backend.to_3d(path="l_ctr.gltf", formats=["gltf"], thickness_side="center")
+    assert r.ok, r.error
+    ir = _load_ir(r.payload["ir_path"])
+    half = thickness / 4.0  # center of the T/2 post
+    assert _point_in_ir_parts(ir, -half, -half, mid_z)
+    assert _point_in_ir_parts(ir, 4 - half, 6 - half, mid_z), "center reflex notch was not filled"
+
+
+@pytest.mark.asyncio
+async def test_outdoor_title_and_note_do_not_cut_an_opening(backend, workspace):
+    """Whole-word match, skipped title layers, and a smaller radius.
+
+    OUTDOOR must not count as a door. A title 10 ft from the south wall must
+    not cut an opening. A WINDOW-layer tick pair must stay a window even if
+    a nearby note says DOOR.
+    """
+    await backend.drawing_create("room")
+    await backend.create_rectangle(0, 0, 10, 12, "WALL")
+    # Title block exactly 10 ft south of the south wall (old radius was 10 ft).
+    await backend.create_text(5, -10, "OUTDOOR KITCHEN", height=1.0, layer="TITLE-BLOCK")
+    # Same words on ANNOTATION, 3 ft inside the room (inside the old 10 ft
+    # radius). Substring matching would have treated this as a door.
+    await backend.create_text(5, 3, "OUTDOOR KITCHEN", height=1.0, layer="ANNOTATION")
+    r = await backend.to_3d(path="outdoor.gltf", formats=["gltf"])
+    assert r.ok, r.error
+    assert r.payload["opening_count"] == 0
+    ir = _load_ir(r.payload["ir_path"])
+    assert ir["openings"] == []
+
+    # Window ticks plus a nearby DOOR note: layer wins.
+    await backend.create_line(3, -0.5, 3, 0.5, "WINDOW")
+    await backend.create_line(6, -0.5, 6, 0.5, "WINDOW")
+    await backend.create_text(4.5, 2, "DOOR", height=1.0, layer="ANNOTATION")
+    r2 = await backend.to_3d(path="window_layer.gltf", formats=["gltf"])
+    assert r2.ok, r2.error
+    assert r2.payload["opening_count"] == 1
+    ir2 = _load_ir(r2.payload["ir_path"])
+    assert ir2["openings"][0]["kind"] == "window"
+    assert ir2["openings"][0]["source"] in {"ticks", "span"}
+
+
+@pytest.mark.asyncio
+async def test_clockwise_cabinet_sides_face_outward(backend, workspace):
+    await backend.drawing_create("room")
+    await backend.create_rectangle(0, 0, 10, 12, "WALL")
+    # Clockwise 2 x 2 cabinet; sides must still face away from the centroid.
+    await backend.create_polyline([(1, 1), (1, 3), (3, 3), (3, 1)], closed=True, layer="CABINET")
+    model = build_model(backend._msp, To3dOptions())
+    cab = next(p for p in model.parts if p.kind == "casework")
+    xs = [v[0] for v in cab.vertices]
+    ys = [v[1] for v in cab.vertices]
+    cx, cy = sum(xs) / len(xs), sum(ys) / len(ys)
+    side_faces = 0
+    for a, b, c in cab.faces:
+        v0, v1, v2 = cab.vertices[a], cab.vertices[b], cab.vertices[c]
+        ux, uy, uz = v1[0] - v0[0], v1[1] - v0[1], v1[2] - v0[2]
+        vx, vy, vz = v2[0] - v0[0], v2[1] - v0[1], v2[2] - v0[2]
+        nx = uy * vz - uz * vy
+        ny = uz * vx - ux * vz
+        nz = ux * vy - uy * vx
+        if abs(nz) >= abs(nx) and abs(nz) >= abs(ny):
+            continue
+        side_faces += 1
+        mx = (v0[0] + v1[0] + v2[0]) / 3.0
+        my = (v0[1] + v1[1] + v2[1]) / 3.0
+        assert nx * (mx - cx) + ny * (my - cy) > 0, (
+            f"cabinet side faces inward at ({mx}, {my})"
+        )
+    assert side_faces >= 8
+
+
+@pytest.mark.asyncio
+async def test_window_block_attributes_set_sill_and_head(backend, workspace):
+    await backend.drawing_create("room")
+    await backend.create_rectangle(0, 0, 10, 12, "WALL")
+    await backend.block_define("WINDOW", [
+        {"type": "LINE", "x1": 0, "y1": 0, "x2": 3, "y2": 0},
+        {"type": "ATTDEF", "tag": "WIDTH", "x": 0, "y": 0},
+        {"type": "ATTDEF", "tag": "HEIGHT", "x": 0, "y": 0},
+    ])
+    ins = await backend.block_insert_with_attributes(
+        "WINDOW", 5, 0, attributes={"WIDTH": "3", "HEIGHT": "4"},
+    )
+    assert ins.ok, ins.error
+    r = await backend.to_3d(path="block_win.gltf", formats=["gltf"])
+    assert r.ok, r.error
+    ir = _load_ir(r.payload["ir_path"])
+    wins = [o for o in ir["openings"] if o["source"] == "block"]
+    assert len(wins) == 1
+    assert wins[0]["kind"] == "window"
+    assert wins[0]["sill"] == pytest.approx(3.0)
+    assert wins[0]["head"] == pytest.approx(7.0)
+
+
+@pytest.mark.asyncio
+async def test_opening_wider_than_wall_warns(backend, workspace):
+    await backend.drawing_create("room")
+    await backend.create_rectangle(0, 0, 10, 12, "WALL")
+    r = await backend.to_3d(
+        path="wide.gltf",
+        formats=["gltf"],
+        openings=[{"kind": "door", "x1": 0, "y1": 6, "x2": 0, "y2": 6, "width": 20}],
+    )
+    assert r.ok, r.error
+    assert any("wider" in w.lower() for w in r.payload["warnings"])

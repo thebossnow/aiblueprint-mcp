@@ -29,6 +29,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   be less than `wall_height`. `ignore_layers` is added to the default list
   (`ignore_layers_mode: "replace"` to override). A `.glb` path writes a real
   binary GLB.
+- **`view.to_3d` text matching, winding, and L-corner review fixes.** Door
+  and window notes match whole words (so "OUTDOOR KITCHEN" is not a door),
+  skip title-block and ignored layers, and use a 4 ft radius. A note cannot
+  override a tick pair whose layer is WINDOW. Clockwise slab, cabinet, and
+  island outlines are normalized by signed area so sides face out. L-shaped
+  rooms place the corner post on the outside of a convex corner or the
+  inside of a reflex corner, for outward, inward, and centered walls. Box
+  vertices are unique per face (flat shading). A warning is raised when an
+  opening is wider than its wall.
 - **`compliance.check_setbacks` gave wrong answers on narrow and necked/flag
   lots.** The buildable envelope was built by moving each lot edge straight
   inward; on narrow lots or lots with a neck those edges cross, and the

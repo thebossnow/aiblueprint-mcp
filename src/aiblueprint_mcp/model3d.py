@@ -50,7 +50,10 @@ _CASEWORK_TOKENS = frozenset({"CABINET", "ISLAND", "APPLIANCE"})
 
 _SNAP_FT = 0.15
 _JOIN_FT = 0.05
-_TEXT_NEAR_FT = 10.0
+_TEXT_NEAR_FT = 4.0
+# Text on these layers is sheet graphics, not a door or window label.
+_TEXT_SKIP_LAYERS = frozenset({"TITLE-BLOCK", "DIMENSION", "NORTH-ARROW", "SETBACK-LINE"})
+_KIND_WORD = re.compile(r"\b(WINDOWS?|DOORS?|OPENINGS?)\b", re.IGNORECASE)
 
 ThicknessSide = Literal["inward", "outward", "center"]
 Vec2 = tuple[float, float]
@@ -444,10 +447,14 @@ def _build_walls(
 
 
 def _kind_from_text(text: str) -> str | None:
-    t = text.upper()
-    if "WINDOW" in t:
+    """Return a kind only when WINDOW, DOOR, or OPENING appears as a whole word.
+
+    Substrings such as OUTDOOR must not count as a door.
+    """
+    words = [m.group(1).upper() for m in _KIND_WORD.finditer(text or "")]
+    if any(w.startswith("WINDOW") for w in words):
         return "window"
-    if "DOOR" in t or "OPENING" in t:
+    if any(w.startswith("DOOR") or w.startswith("OPENING") for w in words):
         return "door"
     return None
 
@@ -467,8 +474,20 @@ def _kind_from_layer(layer: str) -> str | None:
     return None
 
 
+def _resolve_opening_kind(text_kind: str | None, *layers: str) -> str:
+    """Prefer a WINDOW layer over a nearby DOOR/WINDOW note."""
+    layer_kind = None
+    for layer in layers:
+        layer_kind = _kind_from_layer(layer)
+        if layer_kind:
+            break
+    if layer_kind == "window":
+        return "window"
+    return text_kind or layer_kind or "door"
+
+
 def _is_sliding(text: str) -> bool:
-    return "SLIDING" in text.upper()
+    return bool(re.search(r"\bSLIDING\b", text or "", re.IGNORECASE))
 
 
 def _project_on_wall(wall: WallSeg, p: Vec2) -> tuple[float, float, Vec2]:
@@ -484,13 +503,34 @@ def _nearest_wall(walls: list[WallSeg], p: Vec2) -> tuple[WallSeg, float, float,
     return best
 
 
-def _collect_texts(msp) -> list[tuple[str, Vec2]]:
+def _skip_text_layer(layer: str, opts: To3dOptions) -> bool:
+    """Skip title-block and ignored layers when reading door/window notes.
+
+    ANNOTATION is in the default ignore list so it is not extruded, but it is
+    the usual layer for labels, so notes there are still read unless the
+    caller replaced the ignore list and omitted it, or listed it explicitly.
+    """
+    upper = layer.upper()
+    if upper in _TEXT_SKIP_LAYERS or "TITLE" in _tokens(layer):
+        return True
+    extra = {n.upper() for n in (opts.ignore_layers or [])}
+    if upper in extra:
+        return True
+    return False
+
+
+def _collect_texts(msp, opts: To3dOptions) -> list[tuple[str, Vec2]]:
     items: list[tuple[str, Vec2]] = []
     for e in msp:
         t = e.dxftype()
+        if t not in ("TEXT", "MTEXT"):
+            continue
+        layer = e.dxf.get("layer", "0")
+        if _skip_text_layer(layer, opts):
+            continue
         if t == "TEXT":
             items.append((str(e.dxf.text or ""), (float(e.dxf.insert[0]), float(e.dxf.insert[1]))))
-        elif t == "MTEXT":
+        else:
             items.append((str(e.text or ""), (float(e.dxf.insert[0]), float(e.dxf.insert[1]))))
     return items
 
@@ -523,6 +563,13 @@ def _add_opening(
 ) -> Opening:
     if t1 < t0:
         t0, t1 = t1, t0
+    wall_len = _length(_sub(wall.end, wall.start))
+    width = (t1 - t0) * wall_len
+    if wall_len > 1e-9 and width > wall_len + 1e-9:
+        model.warnings.append(
+            f"Opening {name or kind} is {width:g} ft wide, wider than its wall "
+            f"({wall_len:g} ft); it will be clamped to the wall length."
+        )
     t0 = max(0.0, min(1.0, t0))
     t1 = max(0.0, min(1.0, t1))
     if kind == "window":
@@ -620,7 +667,7 @@ def _infer_ticks(msp, model: Model3d, opts: To3dOptions, texts: list[tuple[str, 
             t1, layer1 = ts[i + 1]
             mid_pt = _add(wall.start, _mul(_sub(wall.end, wall.start), (t0 + t1) / 2))
             kind, text = _text_kind_near(texts, mid_pt)
-            kind = kind or _kind_from_layer(layer0) or _kind_from_layer(layer1) or "door"
+            kind = _resolve_opening_kind(kind, layer0, layer1)
             _add_opening(
                 model, wall, t0, t1, kind,
                 source="ticks", opts=opts, name=text or None,
@@ -650,7 +697,7 @@ def _infer_ticks(msp, model: Model3d, opts: To3dOptions, texts: list[tuple[str, 
         _, t1, _ = _project_on_wall(wall, b)
         mid_pt = _add(wall.start, _mul(_sub(wall.end, wall.start), (t0 + t1) / 2))
         kind, text = _text_kind_near(texts, mid_pt)
-        kind = kind or _kind_from_layer(layer) or "door"
+        kind = _resolve_opening_kind(kind, layer)
         _add_opening(
             model, wall, t0, t1, kind, source="span", opts=opts, name=text or None,
         )
@@ -836,15 +883,16 @@ def _prism(name: str, kind: str, origin: Vec3, u: Vec3, v: Vec3, w: Vec3) -> Par
     cy = v[2] * w[0] - v[0] * w[2]
     cz = v[0] * w[1] - v[1] * w[0]
     det = u[0] * cx + u[1] * cy + u[2] * cz
+    # Unique vertices per face so averaged normals stay flat (one normal per face).
+    verts: list[Vec3] = []
     faces: list[tuple[int, int, int]] = []
     for a, b, c, d in quads:
-        if det >= 0:
-            faces.append((a, b, c))
-            faces.append((a, c, d))
-        else:
-            faces.append((a, c, b))
-            faces.append((a, d, c))
-    return Part(name=name, kind=kind, vertices=corners, faces=faces)
+        seq = (a, b, c, d) if det >= 0 else (a, d, c, b)
+        base = len(verts)
+        verts.extend(corners[i] for i in seq)
+        faces.append((base, base + 1, base + 2))
+        faces.append((base, base + 2, base + 3))
+    return Part(name=name, kind=kind, vertices=verts, faces=faces)
 
 
 def _wall_frame(wall: WallSeg, t0: float, t1: float) -> tuple[Vec2, Vec2, Vec2]:
@@ -894,12 +942,27 @@ def _thin_fill(name: str, kind: str, wall: WallSeg, t0: float, t1: float, z0: fl
     return _prism(name, kind, origin, u, v, w)
 
 
-def _corner_posts(model: Model3d) -> list[Part]:
-    """Fill the thickness x thickness gap at each outside ring corner.
+def _corner_is_convex(a: WallSeg, b: WallSeg, ring_area: float) -> bool:
+    """True when the turn from a into b is a convex corner of the ring.
 
-    Outward walls meet at the interior corner, so a post is missing on the
-    outside. Centered walls have a half-thickness outside gap. Inward walls
-    already overlap at the corner and need no post.
+    The cross of the two directions has the same sign as the ring's signed
+    area at a convex turn, and the opposite sign at a reflex (inside) turn.
+    """
+    d0 = _sub(a.end, a.start)
+    d1 = _sub(b.end, b.start)
+    cross = d0[0] * d1[1] - d0[1] * d1[0]
+    return cross * ring_area > 1e-12
+
+
+def _corner_posts(model: Model3d) -> list[Part]:
+    """Fill the thickness x thickness gap at each ring corner.
+
+    At a convex corner, outward walls meet at the interior vertex and leave
+    a post-sized gap on the outside; inward walls already overlap, so no
+    post is added. At a reflex (inside) corner the opposite is true: inward
+    walls leave an interior notch that a post must fill, and outward walls
+    already overlap. Centered walls have a half-thickness gap on the outside
+    of a convex corner and on the inside of a reflex corner.
     """
     posts: list[Part] = []
     by_ring: dict[str, list[WallSeg]] = {}
@@ -908,16 +971,31 @@ def _corner_posts(model: Model3d) -> list[Part]:
             by_ring.setdefault(wall.ring_id, []).append(wall)
     for ring_id, walls in by_ring.items():
         n = len(walls)
+        if n < 3:
+            continue
+        ring_area = _signed_area([w.start for w in walls])
+        if abs(ring_area) < 1e-12:
+            continue
         for i in range(n):
             a, b = walls[i], walls[(i + 1) % n]
-            if a.thickness_side == "inward" or b.thickness_side == "inward":
+            if a.thickness_side != b.thickness_side:
                 continue
-            if a.thickness_side == "outward":
-                scale_a, scale_b = a.thickness, b.thickness
+            side = a.thickness_side
+            convex = _corner_is_convex(a, b, ring_area)
+            if convex:
+                if side == "inward":
+                    continue
+                scale_a = a.thickness if side == "outward" else a.thickness / 2.0
+                scale_b = b.thickness if side == "outward" else b.thickness / 2.0
+                ua = _mul(a.outward, scale_a)
+                vb = _mul(b.outward, scale_b)
             else:
-                scale_a, scale_b = a.thickness / 2.0, b.thickness / 2.0
-            ua = _mul(a.outward, scale_a)
-            vb = _mul(b.outward, scale_b)
+                if side == "outward":
+                    continue
+                scale_a = a.thickness if side == "inward" else a.thickness / 2.0
+                scale_b = b.thickness if side == "inward" else b.thickness / 2.0
+                ua = _mul(a.outward, -scale_a)
+                vb = _mul(b.outward, -scale_b)
             if abs(ua[0] * vb[1] - ua[1] * vb[0]) < 1e-12:
                 continue
             origin = (a.end[0], a.end[1], 0.0)
@@ -1043,20 +1121,43 @@ def _extrude_polygon(name: str, kind: str, pts: list[Vec2], z0: float, z1: float
     ring = _dedupe_ring(pts)
     if len(ring) < 3 or abs(z1 - z0) < 1e-9:
         return None
+    # Walk counter-clockwise so side faces point outward (materials are not
+    # double-sided). Clockwise slab, cabinet, and island outlines would
+    # otherwise get inward-facing sides.
+    if _signed_area(ring) < 0:
+        ring = list(reversed(ring))
     tris = _ear_clip(ring)
     if not tris:
         return None
-    n = len(ring)
-    verts: list[Vec3] = [(p[0], p[1], z0) for p in ring] + [(p[0], p[1], z1) for p in ring]
+    verts: list[Vec3] = []
     faces: list[tuple[int, int, int]] = []
+
+    def add_tri(p: Vec3, q: Vec3, r: Vec3) -> None:
+        i = len(verts)
+        verts.extend((p, q, r))
+        faces.append((i, i + 1, i + 2))
+
     for a, b, c in tris:
-        faces.append((a, c, b))
+        add_tri(
+            (ring[a][0], ring[a][1], z0),
+            (ring[c][0], ring[c][1], z0),
+            (ring[b][0], ring[b][1], z0),
+        )
     for a, b, c in tris:
-        faces.append((a + n, b + n, c + n))
+        add_tri(
+            (ring[a][0], ring[a][1], z1),
+            (ring[b][0], ring[b][1], z1),
+            (ring[c][0], ring[c][1], z1),
+        )
+    n = len(ring)
     for i in range(n):
         j = (i + 1) % n
-        faces.append((i, j, j + n))
-        faces.append((i, j + n, i + n))
+        b0 = (ring[i][0], ring[i][1], z0)
+        b1 = (ring[j][0], ring[j][1], z0)
+        t0 = (ring[i][0], ring[i][1], z1)
+        t1 = (ring[j][0], ring[j][1], z1)
+        add_tri(b0, b1, t1)
+        add_tri(b0, t1, t0)
     return Part(name=name, kind=kind, vertices=verts, faces=faces)
 
 
@@ -1416,7 +1517,7 @@ def build_model(msp, opts: To3dOptions) -> Model3d:
             "layer (or a FOOTPRINT/BUILDING/ADU/STRUCTURE layer), or pass "
             "wall_layers to view.to_3d."
         )
-    texts = _collect_texts(msp)
+    texts = _collect_texts(msp, opts)
     _infer_ticks(msp, model, opts, texts)
     _infer_inserts(msp, model, opts)
     _infer_text_only(model, opts, texts)
