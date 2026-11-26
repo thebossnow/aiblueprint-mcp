@@ -597,3 +597,59 @@ async def test_opening_wider_than_wall_warns(backend, workspace):
     )
     assert r.ok, r.error
     assert any("wider" in w.lower() for w in r.payload["warnings"])
+
+
+@pytest.mark.asyncio
+async def test_off_center_label_does_not_widen_ticked_opening(backend, workspace):
+    """A DOOR note just past a tick pair must not add a second, overlapping opening."""
+    await backend.drawing_create("room")
+    await backend.create_rectangle(0, 0, 10, 12, "WALL")
+    await backend.create_line(-0.5, 2, 0.5, 2, "OPENING")
+    await backend.create_line(-0.5, 8, 0.5, 8, "OPENING")
+    # Just past the north tick (y=8). The 3 ft default span would overlap
+    # the existing 6 ft hole and widen it.
+    await backend.create_text(-2.0, 9.0, "DOOR", height=1.0, layer="ANNOTATION")
+    r = await backend.to_3d(path="off_center.gltf", formats=["gltf"])
+    assert r.ok, r.error
+    assert r.payload["opening_count"] == 1
+    ir = _load_ir(r.payload["ir_path"])
+    assert len(ir["openings"]) == 1
+    op = ir["openings"][0]
+    west = next(
+        w for w in ir["walls"]
+        if min(w["start"][0], w["end"][0]) == 0 and max(w["start"][0], w["end"][0]) == 0
+    )
+    assert op["wall_id"] == west["id"]
+    lo, hi = sorted([op["t0"], op["t1"]])
+    assert (hi - lo) * 12 == pytest.approx(6.0, abs=0.05)
+
+
+@pytest.mark.asyncio
+async def test_opening_note_is_a_doorless_passage(backend, workspace):
+    await backend.drawing_create("room")
+    await backend.create_rectangle(0, 0, 10, 12, "WALL")
+    await backend.create_text(-2.0, 6.0, "OPENING", height=1.0, layer="ANNOTATION")
+    r = await backend.to_3d(path="opening_note.gltf", formats=["gltf"])
+    assert r.ok, r.error
+    ir = _load_ir(r.payload["ir_path"])
+    assert len(ir["openings"]) == 1
+    assert ir["openings"][0]["kind"] == "opening"
+    kinds = {p["kind"] for p in ir["parts"]}
+    assert "door_leaf" not in kinds
+    assert "glass" not in kinds
+    assert "lintel" in kinds
+
+
+@pytest.mark.asyncio
+async def test_schedule_and_reference_notes_do_not_cut_openings(backend, workspace):
+    await backend.drawing_create("room")
+    await backend.create_rectangle(0, 0, 10, 12, "WALL")
+    await backend.create_text(5, 2, "SEE WINDOW SCHEDULE", height=1.0, layer="ANNOTATION")
+    await backend.create_text(-2, 6, "DOOR SCHEDULE", height=1.0, layer="ANNOTATION")
+    await backend.create_text(5, 10, "WINDOW PER A-401", height=1.0, layer="ANNOTATION")
+    r = await backend.to_3d(path="schedule.gltf", formats=["gltf"])
+    assert r.ok, r.error
+    assert r.payload["opening_count"] == 0
+    ir = _load_ir(r.payload["ir_path"])
+    assert ir["openings"] == []
+

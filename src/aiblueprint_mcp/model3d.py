@@ -54,6 +54,11 @@ _TEXT_NEAR_FT = 4.0
 # Text on these layers is sheet graphics, not a door or window label.
 _TEXT_SKIP_LAYERS = frozenset({"TITLE-BLOCK", "DIMENSION", "NORTH-ARROW", "SETBACK-LINE"})
 _KIND_WORD = re.compile(r"\b(WINDOWS?|DOORS?|OPENINGS?)\b", re.IGNORECASE)
+# Notes that point at a schedule or another sheet are not opening labels.
+_REF_NOTE = re.compile(
+    r"\b(SEE|REFER(?:RED)?(?:\s+TO)?|SCHEDULE|PER)\b",
+    re.IGNORECASE,
+)
 
 ThicknessSide = Literal["inward", "outward", "center"]
 Vec2 = tuple[float, float]
@@ -447,15 +452,23 @@ def _build_walls(
 
 
 def _kind_from_text(text: str) -> str | None:
-    """Return a kind only when WINDOW, DOOR, or OPENING appears as a whole word.
+    """Return a kind only when WINDOW, DOOR, or OPENING is the main term.
 
-    Substrings such as OUTDOOR must not count as a door.
+    Substrings such as OUTDOOR must not count as a door. Notes that
+    reference another document (SEE WINDOW SCHEDULE, DOOR SCHEDULE,
+    PER A-401) are ignored. An OPENING note is a doorless passage, not
+    a door with a panel.
     """
-    words = [m.group(1).upper() for m in _KIND_WORD.finditer(text or "")]
+    raw = text or ""
+    if _REF_NOTE.search(raw):
+        return None
+    words = [m.group(1).upper() for m in _KIND_WORD.finditer(raw)]
     if any(w.startswith("WINDOW") for w in words):
         return "window"
-    if any(w.startswith("DOOR") or w.startswith("OPENING") for w in words):
+    if any(w.startswith("DOOR") for w in words):
         return "door"
+    if any(w.startswith("OPENING") for w in words):
+        return "opening"
     return None
 
 
@@ -715,15 +728,29 @@ def _infer_text_only(model: Model3d, opts: To3dOptions, texts: list[tuple[str, V
         wall, dist, t, _q = found
         if dist > _TEXT_NEAR_FT:
             continue
-        if any(o.wall_id == wall.id and o.t0 - 1e-6 <= t <= o.t1 + 1e-6 for o in model.openings):
-            continue
         width = DEFAULT_SLIDING_WIDTH_FT if _is_sliding(text) else DEFAULT_INFERRED_WIDTH_FT
         wall_len = _length(_sub(wall.end, wall.start))
         if wall_len < 1e-9:
             continue
         half = (width / wall_len) / 2.0
+        t0, t1 = t - half, t + half
+        if t1 < t0:
+            t0, t1 = t1, t0
+        candidate = Opening(
+            id="candidate",
+            kind=kind,
+            wall_id=wall.id,
+            t0=max(0.0, min(1.0, t0)),
+            t1=max(0.0, min(1.0, t1)),
+            sill=0.0,
+            head=opts.door_height,
+            source="text",
+            name=text,
+        )
+        if any(_openings_overlap(candidate, o) for o in model.openings):
+            continue
         _add_opening(
-            model, wall, t - half, t + half, kind,
+            model, wall, t0, t1, kind,
             source="text", opts=opts, name=text,
         )
         model.warnings.append(

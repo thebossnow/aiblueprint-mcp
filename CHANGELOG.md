@@ -38,6 +38,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   inside of a reflex corner, for outward, inward, and centered walls. Box
   vertices are unique per face (flat shading). A warning is raised when an
   opening is wider than its wall.
+- **`view.to_3d` text-only openings and note kinds.** A default-width
+  text-only opening is skipped when its span overlaps an opening already
+  on that wall, so an off-center DOOR or WINDOW label just past a tick
+  pair no longer widens the hole. An OPENING note is a doorless passage
+  (kind `opening`), not a door with a panel. Notes that point at another
+  document (SEE WINDOW SCHEDULE, DOOR SCHEDULE, PER A-401) do not cut
+  openings.
 - **`compliance.check_setbacks` gave wrong answers on narrow and necked/flag
   lots.** The buildable envelope was built by moving each lot edge straight
   inward; on narrow lots or lots with a neck those edges cross, and the
